@@ -1,0 +1,72 @@
+# Mis clases
+
+The private classes one tutor gives: who comes when, what each one pays, what she has earned and is owed, and what she could earn with more students. It lives only on her iPad.
+
+## People and money
+
+**Alumno**:
+Someone she gives classes to, with a Tarifa in one currency (UYU or USD) and a colour of their own.
+_Avoid_: cliente, estudiante
+
+**Tarifa**:
+What an Alumno pays per hour, in force from a date on. A new Tarifa never changes Clases before its date.
+_Avoid_: precio, valor hora
+
+**Cotización**:
+How many pesos one dollar is worth, as she typed it. It is used only to show amounts in the other currency.
+_Avoid_: tipo de cambio, dólar
+
+## The agenda
+
+**Horario fijo**:
+An Alumno's weekly slot (a weekday, a start time and a length) in force from one date until, optionally, another.
+_Avoid_: turno, slot, cita
+
+**Clase**:
+One sitting with one Alumno on one date. It comes from a Horario fijo, or it is a Clase extra.
+_Avoid_: sesión, lección, turno
+
+**Clase extra**:
+A one-off Clase outside any Horario fijo.
+
+**Clase movida**:
+A Clase from a Horario fijo held on another day or time. It keeps the Tarifa of its original date.
+
+**Cancelada**:
+A Clase that did not happen. It counts as money only when marked **se cobra** (charged anyway).
+_Avoid_: suspendida, borrada
+
+**Dada**:
+A Clase whose end time has passed and that was not cancelled.
+_Avoid_: hecha, realizada
+
+## Money
+
+**Ganado**:
+The money from Clases that are Dadas, plus Canceladas that se cobran, in a period.
+_Avoid_: ingresos, facturado
+
+**Agendado**:
+The money from Clases still to come in a period.
+_Avoid_: previsto, proyectado (for this meaning)
+
+**Pago**:
+Money an Alumno handed over, on a date, in their currency. "Cobrar" records one for exactly what they owe.
+_Avoid_: cobro, abono
+
+**Te deben**:
+For an Alumno: everything Ganado from them so far minus their Pagos.
+_Avoid_: saldo, deuda pendiente
+
+## Planning
+
+**Proyección**:
+The "¿Y si…?" playground: her current Horarios fijos plus N new Alumnos, each with some classes per week, a length and a Tarifa.
+_Avoid_: simulación, estimación
+
+**Horas por día**:
+All weekly class hours (current plus new Alumnos) divided over five weekdays, whatever day the classes fall on.
+
+**Archivar**:
+To stop an Alumno's Clases from this moment on while keeping their history and what they owe.
+_Avoid_: borrar, dar de baja
