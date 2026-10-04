@@ -132,6 +132,8 @@ try {
   await clase("Martina López", "jueves 8/10").tap();
   await page.waitForSelector("[data-testid=selected-class]");
   await page.tap("[data-testid=cancel-charge]");
+  await page.waitForTimeout(150);
+  check("undo", "only the latest toast offers Deshacer (an older one would undo later changes too)", (await page.$$(".toast [data-undo]")).length === 1);
   await page.waitForTimeout(200);
   st = await saved();
   const martina = student(st, "Martina López");
@@ -151,6 +153,7 @@ try {
   readback.move = mv;
   check("move", "moving saves the new day and time", mv?.date === "2026-10-10" && mv.new_date === "2026-10-09" && mv.new_start === "18:00", JSON.stringify(mv));
   check("move", "the label now sits on Friday", await clase("Lucía Fernández", "viernes 9/10").count() === 1 && await clase("Lucía Fernández", "sábado 10/10").count() === 0);
+  check("move", "moving can be undone from its toast", (await page.$$(".toast [data-undo]")).length === 1);
 
   await page.tap("[data-testid=extra-toggle]");
   await page.selectOption("[data-testid=extra-student]", { label: "Sofía González" });
@@ -283,6 +286,11 @@ try {
   await go("agenda", demoCtx.page);
   await demoCtx.page.tap("[data-action=load-demo]");
   await demoCtx.page.waitForSelector("[data-testid=clase]");
+  const firstDayTop = await demoCtx.page.$eval(".day", (d) => d.getBoundingClientRect().top);
+  check("layout", "portrait: the week starts on the first screen (money is one line above it)", firstDayTop < 600 && await demoCtx.page.isVisible("[data-testid=week-strip]"), `first day at ${Math.round(firstDayTop)}px`);
+  await demoCtx.page.locator("[data-testid=clase]").nth(2).tap();
+  await demoCtx.page.waitForSelector("[data-testid=selected-class]");
+  check("layout", "portrait: a tapped class's actions open right under its day", await demoCtx.page.$eval("[data-testid=selected-class]", (p) => p.previousElementSibling?.classList.contains("day")));
   const routes = ["agenda", "alumnos", "alumnos/1", "ganancias", "ganancias?ver=semanas", "proyeccion", "ajustes"];
   for (const width of [820, 744]) {
     await demoCtx.page.setViewportSize({ width, height: 1180 });

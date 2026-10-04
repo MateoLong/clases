@@ -4,6 +4,13 @@
 
 export const DEFAULT_SETTINGS = { currency: "UYU", usd_rate: 40, title: "Mis clases" };
 export const CURRENCIES = ["UYU", "USD"];
+/** The eight forro colours; each student gets one for good (least used first). */
+export const INKS = ["cobalto", "tomate", "pasto", "violeta", "turquesa", "rosa", "naranja", "girasol"];
+function nextInk(students) {
+  const used = new Map(INKS.map((k) => [k, 0]));
+  for (const s of students) if (!s.archived && used.has(s.ink)) used.set(s.ink, used.get(s.ink) + 1);
+  return INKS.reduce((best, k) => (used.get(k) < used.get(best) ? k : best), INKS[0]);
+}
 const WEEKS_PER_MONTH = 52 / 12;
 
 export class RegistryError extends Error {
@@ -57,9 +64,11 @@ function validMinutes(value) {
 export function parseNumber(value) {
   let t = String(value ?? "").replace(/[\s$]|US/g, "").trim();
   if (!t) return NaN;
-  if (t.includes(",") && t.includes(".")) t = t.replace(/\./g, "").replace(",", ".");
-  else if (t.includes(",")) t = t.replace(",", ".");
-  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+  if (t.includes(",") && t.includes(".")) {
+    // both: whichever comes last is the decimal mark
+    t = t.lastIndexOf(",") > t.lastIndexOf(".") ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+  } else if (/^\d{1,3}([.,]\d{3})+$/.test(t)) t = t.replace(/[.,]/g, ""); // 1.200 / 1,200
+  else t = t.replace(",", ".");
   return Number(t);
 }
 function validAmount(value, label) {
@@ -157,7 +166,7 @@ export class Registry {
     const since = from ? validDate(from) : "2000-01-01";
     const id = this._write((s) => {
       const sid = this._id("student");
-      s.students.push({ id: sid, name, currency, notes: String(notes || "").trim(), archived: false, is_demo: demo, created_at: nowStamp() });
+      s.students.push({ id: sid, name, currency, ink: nextInk(s.students), notes: String(notes || "").trim(), archived: false, is_demo: demo, created_at: nowStamp() });
       s.rates.push({ id: this._id("rate"), student_id: sid, amount, from: since });
       return sid;
     });
@@ -203,18 +212,24 @@ export class Registry {
     return rates[0]?.amount ?? 0;
   }
 
+  /**
+   * Archive: every class from this moment on stops (weekly, moved or extra); everything
+   * that already happened, today included, stays in the history and the account.
+   */
   setArchived(id, archived) {
     const st = this._requireStudent(id);
     if (archived) {
-      // Her weekly classes stop from today; everything before stays in the history.
-      const today = this.today();
+      const now = this.now();
       this._write((s) => {
-        s.students.find((x) => x.id === st.id).archived = true;
-        s.slots = s.slots.filter((sl) => !(sl.student_id === st.id && sl.from >= today));
-        for (const sl of s.slots) if (sl.student_id === st.id && (!sl.to || sl.to >= today)) sl.to = addDays(today, -1);
+        Object.assign(s.students.find((x) => x.id === st.id), { archived: true, archived_at: `${now.date} ${now.time}` });
+        for (const sl of s.slots.filter((x) => x.student_id === st.id && (!x.to || x.to >= now.date))) {
+          const { oldTo } = this._cut(sl, now.date);
+          if (sl.from > oldTo) s.slots = s.slots.filter((x) => x.id !== sl.id);
+          else sl.to = oldTo;
+        }
       });
     } else {
-      this._write((s) => { s.students.find((x) => x.id === st.id).archived = false; });
+      this._write((s) => Object.assign(s.students.find((x) => x.id === st.id), { archived: false, archived_at: null }));
     }
     return this.student(id);
   }
@@ -230,8 +245,10 @@ export class Registry {
     const today = this.today();
     st.rate = this.rateOn(st.id, today);
     st.rates = this.state.rates.filter((r) => r.student_id === st.id).sort((a, b) => (a.from < b.from ? 1 : -1));
-    st.slots = this.activeSlots().filter((s) => s.student_id === st.id);
-    st.weekly_minutes = st.slots.reduce((n, s) => n + s.minutes, 0);
+    // current and upcoming slots (a change "from next Monday" shows both, with their dates)
+    st.slots = this.state.slots.filter((s) => s.student_id === st.id && (!s.to || s.to >= today))
+      .sort((a, b) => a.weekday - b.weekday || toMinutes(a.start) - toMinutes(b.start) || (a.from < b.from ? -1 : 1));
+    st.weekly_minutes = this.activeSlots().filter((s) => s.student_id === st.id).reduce((n, s) => n + s.minutes, 0);
     const bal = this.balance(st.id);
     Object.assign(st, bal);
     return st;
@@ -252,7 +269,7 @@ export class Registry {
     start = validTime(start);
     minutes = validMinutes(minutes);
     from = validDate(from);
-    this._checkOverlap({ weekday: wd, start, minutes });
+    this._checkOverlap({ weekday: wd, start, minutes, from });
     const id = this._write((s) => {
       const sid = this._id("slot");
       s.slots.push({ id: sid, student_id: st.id, weekday: wd, start, minutes, from, to: null });
@@ -261,9 +278,12 @@ export class Registry {
     return this.slot(id);
   }
 
-  _checkOverlap({ weekday: wd, start, minutes }, ignoreId = null) {
-    const a = toMinutes(start), b = a + minutes;
-    const clash = this.activeSlots().find((s) => s.id !== ignoreId && s.weekday === wd && toMinutes(s.start) < b && a < toMinutes(s.start) + s.minutes);
+  /** Two weekly slots clash when they share a weekday, their times overlap and their date ranges meet. */
+  _checkOverlap({ weekday: wd, start, minutes, from, to = null }, ignoreId = null) {
+    const a = toMinutes(start), b = a + minutes, END = "9999-12-31";
+    const clash = this.state.slots.find((s) => s.id !== ignoreId && s.weekday === wd
+      && toMinutes(s.start) < b && a < toMinutes(s.start) + s.minutes
+      && s.from <= (to || END) && from <= (s.to || END));
     if (clash) {
       const who = this._requireStudent(clash.student_id).name;
       throw new RegistryError("overlap", `Ese horario se superpone con ${who} (${clash.start}).`, { slot: clash });
@@ -276,11 +296,22 @@ export class Registry {
     return { ...s };
   }
 
-  /** Slots still running from today on. */
-  activeSlots() {
-    const today = this.today();
-    return this.state.slots.filter((s) => !s.to || s.to >= today)
+  /** The weekly slots in force on a date (today by default). */
+  activeSlots(date = this.today()) {
+    return this.state.slots.filter((s) => s.from <= date && (!s.to || s.to >= date))
       .sort((a, b) => a.weekday - b.weekday || toMinutes(a.start) - toMinutes(b.start));
+  }
+
+  /**
+   * Where a change "from" a date really cuts a slot. From today, if today's class of that
+   * slot has already started, it stays with the old slot and the change starts tomorrow:
+   * money already made never moves.
+   */
+  _cut(slot, from) {
+    const now = this.now();
+    const runsToday = from === now.date && weekday(from) === slot.weekday && slot.from <= from && (!slot.to || slot.to >= from);
+    if (runsToday && slot.start <= now.time) return { oldTo: from, newFrom: addDays(from, 1) };
+    return { oldTo: addDays(from, -1), newFrom: from };
   }
 
   /** Change day/time/length from a date on; classes before that keep the old slot. */
@@ -288,26 +319,26 @@ export class Registry {
     const old = this.slot(id);
     const next = { weekday: wd == null ? old.weekday : Number(wd), start: start == null ? old.start : validTime(start), minutes: minutes == null ? old.minutes : validMinutes(minutes) };
     if (!(next.weekday >= 1 && next.weekday <= 7)) throw new RegistryError("invalid", "Elegí el día de la semana.");
-    from = validDate(from);
-    this._checkOverlap(next, old.id);
+    const { oldTo, newFrom } = this._cut(old, validDate(from));
+    this._checkOverlap({ ...next, from: newFrom }, old.id);
     const id2 = this._write((s) => {
       const o = s.slots.find((x) => x.id === old.id);
-      if (o.from >= from) { Object.assign(o, next); return o.id; }
-      o.to = addDays(from, -1);
+      if (o.from >= newFrom) { Object.assign(o, next); return o.id; }
+      o.to = oldTo;
       const nid = this._id("slot");
-      s.slots.push({ id: nid, student_id: o.student_id, ...next, from, to: null });
+      s.slots.push({ id: nid, student_id: o.student_id, ...next, from: newFrom, to: null });
       return nid;
     });
     return this.slot(id2);
   }
 
-  /** Stop a weekly slot from a date on (history stays). */
+  /** Stop a weekly slot from a date on (history stays, today's class too if it already started). */
   endSlot(id, from = this.today()) {
     const old = this.slot(id);
-    from = validDate(from);
+    const { oldTo, newFrom } = this._cut(old, validDate(from));
     this._write((s) => {
-      if (old.from >= from) s.slots = s.slots.filter((x) => x.id !== old.id);
-      else s.slots.find((x) => x.id === old.id).to = addDays(from, -1);
+      if (old.from >= newFrom) s.slots = s.slots.filter((x) => x.id !== old.id);
+      else s.slots.find((x) => x.id === old.id).to = oldTo;
     });
   }
 
@@ -396,7 +427,9 @@ export class Registry {
     const nowKey = `${now.date} ${now.time}`;
     const out = [];
     const changes = new Map(this.state.changes.map((c) => [`${c.slot_id}-${c.date}`, c]));
+    const stopped = new Map(this.state.students.filter((x) => x.archived && x.archived_at).map((x) => [x.id, x.archived_at]));
     const push = (o) => {
+      if (stopped.has(o.student_id) && `${o.date} ${o.start}` >= stopped.get(o.student_id)) return; // after archiving
       const end = fromMinutes(Math.min(toMinutes(o.start) + o.minutes, 24 * 60 - 1));
       const done = `${o.date} ${end}` <= nowKey;
       const status = o.cancelled ? "cancelled" : done ? "given" : "scheduled";
@@ -592,7 +625,8 @@ export class Registry {
   restore(text) {
     let data;
     try { data = JSON.parse(text); } catch { throw new RegistryError("invalid", "Ese archivo no es una copia de Mis clases."); }
-    if (!data || data.app !== "mis-clases" || !Array.isArray(data.students) || !Array.isArray(data.slots)) {
+    const lists = ["students", "rates", "slots", "changes", "extras", "payments"];
+    if (!data || data.app !== "mis-clases" || lists.some((k) => !Array.isArray(data[k])) || typeof data.settings !== "object" || !data.settings) {
       throw new RegistryError("invalid", "Ese archivo no es una copia de Mis clases.");
     }
     const { app, saved_at, ...state } = data;
@@ -649,5 +683,9 @@ export class Registry {
 
 function migrate(state) {
   const base = emptyState();
-  return { ...base, ...state, seq: { ...base.seq, ...(state.seq || {}) }, settings: { ...base.settings, ...(state.settings || {}) } };
+  const out = { ...base, ...state, seq: { ...base.seq, ...(state.seq || {}) }, settings: { ...base.settings, ...(state.settings || {}) } };
+  // students saved before colours were stored get one now, in the order they were added
+  const done = [];
+  out.students = (out.students || []).map((st) => { const s2 = st.ink ? st : { ...st, ink: nextInk(done) }; done.push(s2); return s2; });
+  return out;
 }

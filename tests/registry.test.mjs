@@ -118,6 +118,62 @@ test("archiving stops future classes and keeps the history and the debt", () => 
   assert.equal(r.balance(martina.id).owes, before);
 });
 
+// ── found by the independent verifier: past money must never change ──
+test("removing, changing or archiving from today keeps a class already given today", () => {
+  clock.time = "20:00"; // Joaquín's Wednesday 18:30–20:00 class has just ended
+  const slot = r.student(joaquin.id).slots[0];
+  const owes = r.balance(joaquin.id).owes;
+  const earned = r.week().earned;
+  const snap = r.state;
+  r.endSlot(slot.id);
+  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+  r.replaceState(snap);
+  r.changeSlot(slot.id, { start: "21:00" });
+  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+  assert.equal(week().filter((c) => c.student_id === joaquin.id).length, 1); // not a second class tonight
+  r.replaceState(snap);
+  r.setArchived(joaquin.id, true);
+  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+});
+
+test("archiving also stops extra and moved classes still to come", () => {
+  r.addExtra(martina.id, { date: "2026-10-09", start: "10:00", minutes: 60 });
+  r.moveClass(`s1-2026-10-12`, { date: "2026-10-13", start: "10:00" });
+  r.setArchived(martina.id, true);
+  assert.equal(r.classesBetween(THU, "2026-10-31").some((c) => c.student_id === martina.id), false);
+});
+
+test("a slot changed from a future date counts once, and frees its old time only from then", () => {
+  const slot = r.student(joaquin.id).slots[0];
+  r.changeSlot(slot.id, { weekday: 4, start: "18:30", from: "2026-10-12" });
+  assert.equal(r.baseline().per_week, 3600); // not doubled
+  assert.equal(r.baseline().hours_per_week, 3.5);
+  // Wednesday 18:30 is still Joaquín's until then, free after
+  rejects(() => r.addSlot(emma.id, { weekday: 3, start: "18:30", minutes: 60, from: WED }), "overlap");
+  assert.ok(r.addSlot(emma.id, { weekday: 3, start: "18:30", minutes: 60, from: "2026-10-14" }));
+});
+
+test("each student keeps one colour; the eight are used before any repeats", () => {
+  const more = ["A", "B", "C", "D", "E"].map((n) => r.addStudent({ name: n, rate: 500 }));
+  const inks = [martina, joaquin, emma, ...more].map((x) => r.student(x.id).ink);
+  assert.equal(new Set(inks).size, 8);
+  const ninth = r.addStudent({ name: "F", rate: 500 });
+  assert.ok(inks.includes(ninth.ink));
+  r.setArchived(more[0].id, true); // a freed colour is reused first
+  assert.equal(r.addStudent({ name: "G", rate: 500 }).ink, r.student(more[0].id).ink);
+  assert.equal(r.student(martina.id).ink, inks[0]); // never changes
+});
+
+test("restore refuses a damaged backup", () => {
+  rejects(() => r.restore('{"app":"mis-clases","students":[],"slots":[],"rates":"x"}'), "invalid");
+});
+
+test("more number formats", () => {
+  assert.equal(parseNumber("1,234.50"), 1234.5);
+  assert.equal(parseNumber("10.000,50"), 10000.5);
+  assert.equal(parseNumber("1,5"), 1.5);
+});
+
 // ── money ──
 test("payments lower what is owed; owing list in her currency", () => {
   assert.equal(r.balance(martina.id).owes, 4000); // Mondays 7/9 … 5/10

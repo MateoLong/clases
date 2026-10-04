@@ -51,15 +51,19 @@ function parseDM(text) {
   const iso = (yy) => `${yy}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   const t = new Date(`${iso(y)}T12:00:00`);
   if (t.getDate() !== d || t.getMonth() + 1 !== mo) return null;
-  if (!m[3] && iso(y) < addDays(today, -180)) y += 1;
+  if (!m[3]) { // no year typed: the closest one (28/12 typed in January is last December)
+    const gap = (yy) => Math.abs(Date.parse(`${iso(yy)}T12:00:00`) - Date.parse(`${today}T12:00:00`));
+    y = [y - 1, y, y + 1].reduce((a, b) => (gap(b) < gap(a) ? b : a));
+  }
   return iso(y);
 }
 
-// Each student keeps one forro colour everywhere (dark inks only: white initials sit on them).
-const INKS = ["cobalto", "tomate", "pasto", "violeta", "turquesa", "rosa"];
-const ink = (id) => `var(--f-${INKS[(Number(id) * 5 + 1) % INKS.length]})`;
+// Each student keeps the forro colour stored with them; initials are ink on the two light ones.
+const inkName = (id) => reg.state.students.find((x) => x.id === Number(id))?.ink || "cobalto";
+const ink = (id) => `var(--f-${inkName(id)})`;
+const lightInk = (id) => ["girasol", "naranja"].includes(inkName(id));
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-const avatar = (s, size = 34) => `<span class="avatar" style="--c:${ink(s.id)};width:${size}px;height:${size}px;font-size:${size * 0.38}px" aria-hidden="true">${esc(initials(s.name))}</span>`;
+const avatar = (s, size = 34) => `<span class="avatar" style="--c:${ink(s.id)};${lightInk(s.id) ? "color:var(--ink);" : ""}width:${size}px;height:${size}px;font-size:${size * 0.38}px" aria-hidden="true">${esc(initials(s.name))}</span>`;
 
 // ── toasts & undo ─────────────────────────────────────────────────────
 function toast(message, { action, label = "Deshacer", error = false, ms = 7000 } = {}) {
@@ -74,6 +78,7 @@ function toast(message, { action, label = "Deshacer", error = false, ms = 7000 }
     b.className = "btn btn-sm";
     b.type = "button";
     b.textContent = label;
+    b.dataset.undo = "";
     b.addEventListener("click", () => { el.remove(); action(); });
     el.append(b);
   }
@@ -83,12 +88,22 @@ function toast(message, { action, label = "Deshacer", error = false, ms = 7000 }
   setTimeout(() => el.remove(), ms);
 }
 
+// Deshacer puts back the state from before a change, so only the latest change may offer it:
+// undoing an older one would also undo everything done after it.
+let undoTicket = 0;
+function undoable(snapshot) {
+  const ticket = ++undoTicket;
+  $$(".toast [data-undo]").forEach((b) => b.remove());
+  return { action: () => { if (ticket !== undoTicket) return; reg.replaceState(snapshot); undoTicket++; toast("Listo, quedó como antes."); route(); } };
+}
+
 /** Run a change; on error show it; offer Deshacer that puts the previous state back. */
 function act(fn, message, { undo = true, after = route } = {}) {
   const snapshot = reg.state;
   try {
     const out = fn();
-    if (message) toast(typeof message === "function" ? message(out) : message, undo ? { action: () => { reg.replaceState(snapshot); toast("Listo, quedó como antes."); route(); } } : {});
+    if (message) toast(typeof message === "function" ? message(out) : message, undo ? undoable(snapshot) : {});
+    else undoTicket++;
     after?.();
     return out ?? true;
   } catch (err) {
@@ -98,12 +113,14 @@ function act(fn, message, { undo = true, after = route } = {}) {
 }
 
 /** Same, but shows the error inside a form instead of a toast. */
-function actInForm(form, fn, message) {
+function actInForm(form, fn, message, { undo = true } = {}) {
   const box = $(".form-msg", form);
+  const snapshot = reg.state;
   try {
     const out = reg.atomic(fn);
     if (box) box.innerHTML = "";
-    if (message) toast(typeof message === "function" ? message(out) : message);
+    if (message) toast(typeof message === "function" ? message(out) : message, undo ? undoable(snapshot) : {});
+    else undoTicket++;
     route();
     return out;
   } catch (err) {
@@ -158,13 +175,16 @@ function viewAgenda(params) {
           <h1 id="week-h">${range}</h1>
           <a class="btn btn-quiet btn-icon" href="#/agenda?semana=${addDays(from, 7)}" aria-label="Semana siguiente" data-testid="next-week">${icon("chevron-right")}</a>
           ${thisWeek ? "" : `<a class="btn btn-line btn-sm" href="#/agenda">Hoy</a>`}
+          <button type="button" class="btn btn-go btn-extra" data-act="open-extra" data-testid="extra-toggle" aria-expanded="${extraOpen}" ${students.length ? "" : "disabled"}>${icon("calendar-plus")}Clase extra</button>
         </div>
+        <p class="week-strip" data-testid="week-strip"><span><strong>${money(week.earned)}</strong> ${past ? "ganados" : "ganados"}</span>${past ? "" : `<span>faltan <strong>${money(week.expected)}</strong></span>`}<span>total <strong>${money(week.total)}</strong></span>${reg.owing().length ? `<a href="#owing">te deben <strong>${money(reg.owing().reduce((n, o) => n + o.owes_display, 0))}</strong></a>` : ""}</p>
+        ${extraOpen ? `<section class="panel extra-panel">${extraForm(students, thisWeek ? today : from)}</section>` : ""}
         <div class="board" style="--days:${days.length}" data-testid="board">
           ${days.map((d) => {
             const cs = classes.filter((c) => c.date === d);
-            return `<section class="day ${d === today ? "is-today" : ""}" aria-label="${fmtDayLong(d)}">
+            return `<section class="day ${d === today ? "is-today" : ""}" data-date="${d}" aria-label="${fmtDayLong(d)}">
               <h2 class="day-head"><span>${DAYS_SHORT[weekday(d) - 1]}</span> <strong>${dayNum(d)}</strong>${d === today ? `<em>hoy</em>` : ""}</h2>
-              <div class="day-classes">${cs.length ? cs.map(classLabel).join("") : `<p class="free">Libre</p>`}</div>
+              <div class="day-classes">${cs.length ? cs.map(classLabel).join("") : `<p class="free hand">libre</p>`}</div>
             </section>`;
           }).join("")}
         </div>
@@ -183,16 +203,23 @@ function viewAgenda(params) {
         </section>
         ${sel ? selectedPanel(sel) : ""}
         ${owingPanel()}
-        <section class="panel rail-extra">
-          ${extraOpen ? extraForm(students, thisWeek ? today : from) : `<button type="button" class="btn btn-go" data-act="open-extra" data-testid="extra-toggle" ${students.length ? "" : "disabled"}>${icon("calendar-plus")}Clase extra</button>`}
-        </section>
       </aside>
     </div>`;
 
-  $$(".clase").forEach((b) => b.addEventListener("click", () => { selected = selected === b.dataset.key ? null : b.dataset.key; viewAgenda(params); }));
+  $$(".clase").forEach((b) => b.addEventListener("click", () => {
+    selected = selected === b.dataset.key ? null : b.dataset.key;
+    viewAgenda(params);
+    $(`.clase[data-key="${CSS.escape(b.dataset.key)}"]`)?.focus({ preventScroll: true });
+  }));
+  // In portrait the rail sits under the week: show the chosen class's actions right under its day.
+  if (sel && matchMedia("(max-width: 1080px)").matches) {
+    const panel = $("[data-testid=selected-class]");
+    const day = $(`.day[data-date="${sel.date}"]`);
+    if (panel && day) { day.after(panel); panel.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+  }
   wireSelected(sel, params);
   wireOwing();
-  $("[data-act=open-extra]")?.addEventListener("click", () => { extraOpen = true; viewAgenda(params); $("#extra-form [name=student]")?.focus(); });
+  $("[data-act=open-extra]")?.addEventListener("click", () => { extraOpen = !extraOpen; viewAgenda(params); $("#extra-form [name=student]")?.focus(); });
   wireExtra(params);
   wireFirstRun();
 }
@@ -234,7 +261,7 @@ function selectedPanel(c) {
       <div class="form-msg"></div>
       <button class="btn btn-go btn-sm" type="submit">Mover la clase</button>
     </form>
-    <a class="link-small" href="#/alumnos/${c.student_id}">Ver la ficha de ${esc(c.student.split(" ")[0])} →</a>
+    <a class="link-small" href="#/alumnos/${c.student_id}">Ver la ficha de ${esc(c.student.split(" ")[0])}${icon("chevron-right")}</a>
   </section>`;
 }
 
@@ -259,9 +286,9 @@ function wireSelected(c, params) {
 function owingPanel() {
   const owing = reg.owing();
   const total = owing.reduce((n, o) => n + o.owes_display, 0);
-  return `<section class="panel rail-owing" data-testid="owing">
+  return `<section class="panel rail-owing" id="owing" data-testid="owing">
     <h2>Te deben ${owing.length ? `<span class="owing-total">${money(total)}</span>` : ""}</h2>
-    ${owing.length ? `<ul class="owing-list">${owing.map((o) => `<li data-student="${o.id}">
+    ${owing.length ? `<ul class="owing-list">${owing.map((o) => `<li data-student="${o.id}" style="--c:${ink(o.id)}">
         <span class="swatch-dot" style="--c:${ink(o.id)}" aria-hidden="true"></span>
         <a href="#/alumnos/${o.id}" class="owing-name">${esc(o.name)}</a>
         <span class="owing-amount">${moneyIn(o.owes_display, cur())}${o.currency !== cur() ? `<small>${moneyIn(o.owes, o.currency)}</small>` : ""}</span>
@@ -283,7 +310,7 @@ function wireOwing() {
     const row = b.closest("li");
     row.classList.add("is-paid");
     b.disabled = true;
-    toast(`Cobrado: ${moneyIn(amount, st.currency)} de ${st.name}.`, { action: () => { reg.replaceState(snapshot); toast("Listo, quedó como antes."); route(); } });
+    toast(`Cobrado: ${moneyIn(amount, st.currency)} de ${st.name}.`, undoable(snapshot));
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     setTimeout(route, reduce ? 300 : 1100);
   }));
@@ -343,7 +370,11 @@ function backupNudge() {
 }
 
 // ══ ALUMNOS ════════════════════════════════════════════════════════════
-const slotText = (s) => `${DAYS_SHORT[s.weekday - 1]} ${s.start}`;
+const slotDates = (s) => {
+  const today = reg.today();
+  return `${s.from > today ? ` desde el ${fmtDM(s.from)}` : ""}${s.to ? ` hasta el ${fmtDM(s.to)}` : ""}`;
+};
+const slotText = (s) => `${DAYS_SHORT[s.weekday - 1]} ${s.start}${slotDates(s)}`;
 
 function viewAlumnos(params) {
   const showArchived = params.get("archivados") === "1";
@@ -407,7 +438,7 @@ function viewAlumno(id) {
   const pays = reg.payments(s.id);
   const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}${r.from.slice(0, 4) !== today.slice(0, 4) ? `/${r.from.slice(0, 4)}` : ""}`}`).join(" · ") : "";
   main.innerHTML = `
-    <a class="back" href="#/alumnos">← Alumnos</a>
+    <a class="back" href="#/alumnos">${icon("chevron-left")}Alumnos</a>
     <div class="detail-head">
       ${avatar(s, 84)}
       <div><h1>${esc(s.name)}</h1>
@@ -431,14 +462,14 @@ function viewAlumno(id) {
           <div class="form-msg"></div>
           <button class="btn btn-go" type="submit" data-testid="pay-save">${icon("hand-coins")}Registrar pago</button>
         </form>
-        ${pays.length ? `<h3 class="sub-h">Pagos</h3><ul class="plain-list" data-testid="payments">${pays.slice(0, 12).map((p) => `<li><span>${fmtDayLong(p.date)}${p.date.slice(0, 4) !== today.slice(0, 4) ? ` de ${p.date.slice(0, 4)}` : ""}</span><strong>${moneyIn(p.amount, p.currency)}</strong>
+        ${pays.length ? `<h3 class="sub-h">Pagos</h3><ul class="plain-list" data-testid="payments">${pays.slice(0, 12).map((p) => `<li class="pay-row"><span>${fmtDayLong(p.date)}${p.date.slice(0, 4) !== today.slice(0, 4) ? ` de ${p.date.slice(0, 4)}` : ""}</span><strong>${moneyIn(p.amount, p.currency)}</strong>
             <button type="button" class="btn btn-quiet btn-sm" data-unpay="${p.id}" aria-label="Borrar el pago de ${moneyIn(p.amount, p.currency)} del ${fmtDM(p.date)}">${icon("x")}</button></li>`).join("")}</ul>` : ""}
       </section>
 
       <section class="panel" data-testid="slots">
         <h2>Días de clase</h2>
         ${s.slots.length ? `<ul class="plain-list">${s.slots.map((sl) => `<li class="slot-row" data-slot="${sl.id}">
-            <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}</span>
+            <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}${slotDates(sl) ? `<span class="muted">${slotDates(sl)}</span>` : ""}</span>
             <span class="row"><button type="button" class="btn btn-quiet btn-sm" data-edit-slot="${sl.id}">${icon("pencil")}Cambiar</button>
             <button type="button" class="btn btn-quiet btn-sm btn-danger" data-end-slot="${sl.id}">${icon("x")}Quitar</button></span>
             <form class="slot-form inline-form" data-slot-form="${sl.id}" hidden novalidate>
@@ -566,7 +597,7 @@ function columnChart(box, items) {
       const x = padL + band * i + (band - bw) / 2;
       const yE = y(it.earned), yT = y(it.earned + it.expected);
       const gap = it.earned > 0 && it.expected > 0 ? 2 : 0;
-      return `<g class="col ${it.current ? "is-current" : ""}" data-i="${i}" tabindex="0" aria-label="${esc(`${it.long}: ganado ${money(it.earned)}${it.expected ? `, previsto ${money(it.expected)}` : ""}`)}">
+      return `<g class="col ${it.current ? "is-current" : ""}" data-i="${i}" tabindex="0" aria-label="${esc(`${it.long}: ganado ${money(it.earned)}${it.expected ? `, agendado ${money(it.expected)}` : ""}`)}">
         <rect x="${padL + band * i}" y="${padT}" width="${band}" height="${H - padT - padB}" class="hit"/>
         ${bar(x, yE, y(0), C_EARNED, !it.expected)}
         ${it.expected ? bar(x, yT, yE - gap, C_EXPECTED, true) : ""}
@@ -583,8 +614,8 @@ function columnChart(box, items) {
     const strong = document.createElement("strong"); strong.textContent = money(it.earned + it.expected);
     const title = document.createElement("span"); title.textContent = it.long;
     tip.append(title, strong);
-    for (const [label, v, c] of [["Ganado", it.earned, C_EARNED], ["Previsto", it.expected, C_EXPECTED]]) {
-      if (!v && label === "Previsto") continue;
+    for (const [label, v, c] of [["Ganado", it.earned, C_EARNED], ["Agendado", it.expected, C_EXPECTED]]) {
+      if (!v && label === "Agendado") continue;
       const row = document.createElement("span"); row.className = "tip-row";
       const key = document.createElement("i"); key.style.background = c;
       row.append(key, document.createTextNode(`${label} ${money(v)}`));
@@ -621,12 +652,11 @@ function viewGanancias(params) {
 
   main.innerHTML = `
     <div class="page-head"><div><h1>Ganancias</h1><p>Todo en ${cur() === "USD" ? `dólares (1 US$ = ${moneyIn(reg.state.settings.usd_rate, "UYU")})` : "pesos"}. Una clase cuenta como ganada cuando ya pasó; las canceladas solo si se cobran.</p></div></div>
-    <div class="tiles-stats" data-testid="money-tiles">
-      <div class="stat-tile"><span class="stat-label">Este mes</span><span class="stat-value" data-testid="month-total">${money(thisMonth.earned)}</span><span class="stat-sub">ganados · ${money(thisMonth.expected)} más agendados</span></div>
-      <div class="stat-tile"><span class="stat-label">Esta semana</span><span class="stat-value">${money(thisWeek.earned)}</span><span class="stat-sub">de ${money(thisWeek.total)} de la semana</span></div>
-      <div class="stat-tile"><span class="stat-label">Promedio por mes</span><span class="stat-value">${money(avg)}</span><span class="stat-sub">${full.length ? `últimos ${plural(full.length, "mes", "meses")} completos` : "todavía no hay un mes completo"}</span></div>
-      <div class="stat-tile"><span class="stat-label">Te deben</span><span class="stat-value">${money(owing)}</span><span class="stat-sub">${owing ? `<a href="#/agenda">ver quiénes</a>` : "todos al día"}</span></div>
-    </div>
+    <section class="panel month-lead" data-testid="money-tiles">
+      <p class="muted">En ${MONTHS[Number(today.slice(5, 7)) - 1]} llevás ganados</p>
+      <p class="hero-figure" data-testid="month-total">${money(thisMonth.earned)}</p>
+      <p class="lead-sentence">y tenés <strong>${money(thisMonth.expected)}</strong> más agendados para lo que queda del mes. Esta semana van <strong>${money(thisWeek.earned)}</strong> de ${money(thisWeek.total)}${full.length ? `; tu promedio de los últimos ${plural(full.length, "mes", "meses")} completos es <strong>${money(avg)}</strong>` : ""}.${owing ? ` Te deben <a href="#/agenda">${money(owing)}</a>.` : " Nadie te debe nada."}</p>
+    </section>
     <section class="panel chart-panel" aria-labelledby="chart-h">
       <div class="chart-head">
         <h2 id="chart-h">${mode === "meses" ? "Por mes" : "Por semana"}</h2>
@@ -705,8 +735,11 @@ function viewProyeccion() {
     $("[data-testid=proj-students]").textContent = proj.students;
     $("[data-testid=proj-perweek]").textContent = proj.per_week;
     $("[data-testid=proj-rate-out]").textContent = money(proj.rate);
+    const range = $("[name=rate]");
+    range.style.setProperty("--p", `${(proj.rate / Number(range.max)) * 100}%`);
     $$("[data-min]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.min) === proj.minutes)));
     $("[data-testid=proj-result]").innerHTML = `
+      <div class="blank-labels" aria-hidden="true">${Array.from({ length: Math.min(p.extra.students, 12) }, () => `<span class="blank-label"><span class="hand">nuevo</span></span>`).join("")}${p.extra.students > 12 ? `<span class="blank-more">+${p.extra.students - 12}</span>` : ""}</div>
       <p class="proj-lead">Con ${plural(p.extra.students, "alumno nuevo", "alumnos nuevos")} ganarías</p>
       <p class="hero-figure proj-hero" data-testid="proj-extra-month">+ ${money(p.extra.per_month)}</p>
       <p class="proj-lead">más por mes${p.growth != null && p.extra.per_month ? ` <span class="growth">(+${fmt("UYU", 0).format(p.growth)}%)</span>` : ""}</p>
