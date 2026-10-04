@@ -98,9 +98,9 @@
   color: var(--pasto-ink); border: 3px solid var(--pasto-ink); border-radius: 8px; padding: 0 10px;
   background: color-mix(in srgb, white 70%, transparent); opacity: 0; pointer-events: none;
 }
-.owing-list li.is-paid .stamp { animation: stamp .42s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.owing-list li.is-paid .stamp { animation: stamp .42s var(--ease-out) forwards; }
 .owing-list li.is-paid .owing-amount { color: var(--ink-2); text-decoration: line-through; }
-@keyframes stamp { 0% { opacity: 0; scale: 1.8; } 60% { opacity: 1; scale: .94; } 100% { opacity: 1; scale: 1; } }
+@keyframes stamp { 0% { opacity: 0; scale: 1.8; } 55% { opacity: 1; scale: .94; } 100% { opacity: 1; scale: 1; } }
 
 .rail-extra .btn-go { width: 100%; }
 .extra-form { display: grid; gap: 12px; }
@@ -204,7 +204,7 @@
 .pbar-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .pbar-label { font-weight: 700; }
 .pbar-track { display: flex; gap: 2px; height: 24px; }
-.pbar { display: block; height: 24px; transition: width .35s var(--ease-out); }
+.pbar { display: block; height: 24px; }
 .pbar.seg-base { background: #2347b5; }
 .pbar.seg-new { background: #21804a; border-radius: 0 4px 4px 0; }
 .pbar-track .pbar:only-child, .pbar-track .pbar.seg-base:last-child { border-radius: 0 4px 4px 0; }
@@ -243,5 +243,4 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .owing-list li.is-paid .stamp { animation: none; opacity: 1; }
-  .pbar { transition: none; }
 }
