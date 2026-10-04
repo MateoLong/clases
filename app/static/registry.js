@@ -67,8 +67,8 @@ export function parseNumber(value) {
   if (t.includes(",") && t.includes(".")) {
     // both: whichever comes last is the decimal mark
     t = t.lastIndexOf(",") > t.lastIndexOf(".") ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
-  } else if (/^\d{1,3}([.,]\d{3})+$/.test(t)) t = t.replace(/[.,]/g, ""); // 1.200 / 1,200
-  else t = t.replace(",", ".");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ""); // 1.200 (dots group thousands here)
+  else t = t.replace(",", "."); // 1,5 (the comma is the decimal mark)
   return Number(t);
 }
 function validAmount(value, label) {
@@ -138,9 +138,12 @@ export class Registry {
     const ch = {};
     if (currency != null) ch.currency = validCurrency(currency);
     if (usd_rate != null) {
-      const r = validAmount(usd_rate, "La cotización");
-      if (r < 1) throw new RegistryError("invalid", "La cotización tiene que ser mayor que 1 (pesos por dólar).");
-      ch.usd_rate = r;
+      // A rate like "39,875" or "40.125" is always decimals: nobody pays 39.875 pesos for a dollar.
+      const t = String(usd_rate).trim().replace(/\s|\$/g, "");
+      const r = typeof usd_rate === "number" ? usd_rate : /^\d+[.,]\d+$/.test(t) ? Number(t.replace(",", ".")) : parseNumber(t);
+      if (!Number.isFinite(r)) throw new RegistryError("invalid", "La cotización tiene que ser un número, por ejemplo 40,5.");
+      if (r < 1 || r > 1000) throw new RegistryError("invalid", "La cotización son los pesos que vale 1 dólar: un número entre 1 y 1000, por ejemplo 40,5.");
+      ch.usd_rate = Math.round(r * 10000) / 10000;
     }
     if (title != null) {
       if (!String(title).trim()) throw new RegistryError("invalid", "El nombre no puede quedar vacío.");

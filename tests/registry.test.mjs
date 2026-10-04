@@ -168,8 +168,15 @@ test("restore refuses a damaged backup", () => {
   rejects(() => r.restore('{"app":"mis-clases","students":[],"slots":[],"rates":"x"}'), "invalid");
 });
 
+test("the exchange rate always reads its comma or dot as decimals, and a silly rate is refused", () => {
+  assert.equal(r.updateSettings({ usd_rate: "39,875" }).usd_rate, 39.875);
+  assert.equal(r.updateSettings({ usd_rate: "40.125" }).usd_rate, 40.125);
+  rejects(() => r.updateSettings({ usd_rate: "39875" }), "invalid");
+});
+
 test("more number formats", () => {
   assert.equal(parseNumber("1,234.50"), 1234.5);
+  assert.equal(parseNumber("1,000"), 1); // comma = decimal mark in Uruguay
   assert.equal(parseNumber("10.000,50"), 10000.5);
   assert.equal(parseNumber("1,5"), 1.5);
 });

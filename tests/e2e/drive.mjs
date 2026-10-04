@@ -262,13 +262,31 @@ try {
   check("backup", "restoring the file on an empty iPad gives the same week, debts and months", JSON.stringify(a.week()) === JSON.stringify(b.week()) && JSON.stringify(a.owing()) === JSON.stringify(b.owing()) && JSON.stringify(a.months()) === JSON.stringify(b.months()));
   await fresh.ctx.close();
 
-  // ── F10 clear demo keeps real data ──
-  await go("ajustes");
-  await page.tap(".settings [data-action=clear-demo]");
+  // ── an older Deshacer must not undo a later change that had no undo of its own ──
+  await go("alumnos");
+  await page.tap("[data-testid=add-student-toggle]");
+  await page.fill("[data-testid=new-name]", "Real Uno");
+  await page.fill("[data-testid=new-rate]", "700");
+  await page.tap("[data-testid=new-save]");
+  await page.waitForSelector("[data-testid=account]");
+  await page.tap("[data-testid=demo-strip] [data-action=clear-demo]"); // a change with no Deshacer of its own
   await page.waitForSelector("[data-testid=demo-strip][hidden]", { state: "attached" });
+  const stale = page.locator(".toast [data-undo]");
+  const hadStale = await stale.count();
+  if (hadStale) await stale.first().tap();
+  await page.waitForTimeout(200);
   st = await saved();
+  check("undo", "an older Deshacer cannot undo a later change (demo stays cleared, Real Uno stays)", Boolean(student(st, "Real Uno")) && !st.students.some((x) => x.is_demo), `stale button present: ${hadStale}`);
+  await go("ajustes");
+  await page.fill("[data-testid=usd-rate]", "39,875");
+  await page.tap("[data-testid=settings-save]");
+  await page.waitForTimeout(150);
+  check("currency", "typing the rate 39,875 saves 39.875, not 39875", (await saved()).settings.usd_rate === 39.875, (await saved()).settings.usd_rate);
+
+  // ── F10 clear demo keeps real data ──
+  st = await saved(); // the demo was cleared just above
   readback.afterClear = { students: st.students.map((s) => s.name), slots: st.slots.length, payments: st.payments.length };
-  check("clear-demo", "only demo students go; Valentina and her slot stay", JSON.stringify(readback.afterClear) === JSON.stringify({ students: ["Valentina Ríos"], slots: 1, payments: 0 }), JSON.stringify(readback.afterClear));
+  check("clear-demo", "only demo students go; Valentina (with her slot) and Real Uno stay", JSON.stringify(readback.afterClear) === JSON.stringify({ students: ["Valentina Ríos", "Real Uno"], slots: 1, payments: 0 }), JSON.stringify(readback.afterClear));
 
   // ── Offline ──
   await go("agenda");

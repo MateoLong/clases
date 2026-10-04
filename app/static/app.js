@@ -93,8 +93,18 @@ function toast(message, { action, label = "Deshacer", error = false, ms = 7000 }
 let undoTicket = 0;
 function undoable(snapshot) {
   const ticket = ++undoTicket;
+  const after = reg.state; // the state this change produced
   $$(".toast [data-undo]").forEach((b) => b.remove());
-  return { action: () => { if (ticket !== undoTicket) return; reg.replaceState(snapshot); undoTicket++; toast("Listo, quedó como antes."); route(); } };
+  return {
+    action: () => {
+      // Any later change at all (even one with no Deshacer of its own) makes this one final.
+      if (ticket !== undoTicket || reg.state !== after) { toast("Ya hiciste otro cambio después; este ya no se puede deshacer."); return; }
+      reg.replaceState(snapshot);
+      undoTicket++;
+      toast("Listo, quedó como antes.");
+      route();
+    },
+  };
 }
 
 /** Run a change; on error show it; offer Deshacer that puts the previous state back. */
