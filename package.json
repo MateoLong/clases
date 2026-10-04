@@ -1,0 +1,9 @@
+{
+  "name": "mis-clases",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/registry.test.mjs",
+    "serve": "python3 -m http.server 8766 --directory app/static"
+  }
+}
