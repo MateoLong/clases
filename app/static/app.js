@@ -41,6 +41,8 @@ function fmtDuration(min) {
   return m ? `${h} h ${m}` : `${h} h`;
 }
 const fmtHours = (hours) => fmtDuration(Math.round(hours * 60));
+/** Hours per day, rounded to 5 minutes so it reads naturally ("2 h 10", not "2 h 12"). */
+const fmtDayHours = (hours) => (hours > 0 ? fmtDuration(Math.max(5, Math.round((hours * 60) / 5) * 5)) : "0 h");
 /** "17/10", "17-10-2026" -> ISO; without a year, a date far in the past means next year. */
 function parseDM(text) {
   const m = String(text).trim().match(/^(\d{1,2})\s*[/.-]\s*(\d{1,2})(?:\s*[/.-]\s*(\d{2}|\d{4}))?$/);
@@ -758,6 +760,7 @@ function viewProyeccion() {
         <div class="pbar-row"><span class="pbar-label">Con ${p.extra.students} más</span><span class="pbar-track"><span class="pbar seg-base" style="width:${(p.base.per_month / max) * 100}%"></span><span class="pbar seg-new" style="width:${(p.extra.per_month / max) * 100}%"></span></span><span class="pbar-value" data-testid="proj-total-month">${money(p.total.per_month)}</span></div>
       </div>
       <ul class="legend"><li><i style="background:${C_EARNED}"></i>Tus clases de hoy</li><li><i style="background:var(--f-pasto)"></i>Alumnos nuevos</li></ul>
+      <p class="per-day" data-testid="proj-per-day">${icon("clock")}<span>Serían <strong>${fmtDayHours(p.total.hours_per_day)} por día</strong>, de lunes a viernes <span class="muted">(hoy ${fmtDayHours(p.base.hours_per_day)})</span></span></p>
       <dl class="stats proj-stats">
         <div><dt>Por semana</dt><dd>+ ${money(p.extra.per_week)}</dd></div>
         <div><dt>Por año</dt><dd data-testid="proj-extra-year">+ ${money(p.extra.per_year)}</dd></div>

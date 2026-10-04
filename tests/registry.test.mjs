@@ -221,6 +221,8 @@ test("projection: today's weekly slots plus N new students", () => {
   assert.deepEqual([p.extra.hours_per_week, p.extra.per_week, p.total.hours_per_week, p.total.students], [4, 3600, 7.5, 5]);
   assert.equal(p.extra.per_month, Math.round(3600 * 52 / 12 * 100) / 100);
   assert.equal(p.growth, 100);
+  // hours per day over a 5-day week, counting every student: today 3.5 h / 5, with them 7.5 h / 5
+  assert.deepEqual([base.hours_per_day, p.total.hours_per_day], [0.7, 1.5]);
   assert.equal(r.projection({ students: 0, rate: 900 }).extra.per_week, 0);
 });
 

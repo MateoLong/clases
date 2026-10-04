@@ -12,6 +12,8 @@ function nextInk(students) {
   return INKS.reduce((best, k) => (used.get(k) < used.get(best) ? k : best), INKS[0]);
 }
 const WEEKS_PER_MONTH = 52 / 12;
+/** Hours per day are spread over a five-day week (all her classes, whatever day they fall on). */
+const WORKDAYS = 5;
 
 export class RegistryError extends Error {
   constructor(code, message, info = {}) {
@@ -567,7 +569,7 @@ export class Registry {
     const students = new Set(this.activeSlots().map((s) => s.student_id)).size;
     const hours = minutes / 60;
     return { students, per_week: round2(perWeek), per_month: round2(perWeek * WEEKS_PER_MONTH), hours_per_week: round2(hours),
-      avg_rate: hours ? round2(perWeek / hours) : 0 };
+      hours_per_day: round2(hours / WORKDAYS), avg_rate: hours ? round2(perWeek / hours) : 0 };
   }
 
   /**
@@ -582,7 +584,8 @@ export class Registry {
     return {
       base,
       extra: { students: n, hours_per_week: round2(extraHours), per_week: extraWeek, per_month: round2(extraWeek * WEEKS_PER_MONTH), per_year: round2(extraWeek * 52) },
-      total: { students: base.students + n, hours_per_week: round2(base.hours_per_week + extraHours), per_week: round2(base.per_week + extraWeek),
+      total: { students: base.students + n, hours_per_week: round2(base.hours_per_week + extraHours),
+        hours_per_day: round2((base.hours_per_week + extraHours) / WORKDAYS), per_week: round2(base.per_week + extraWeek),
         per_month: round2((base.per_week + extraWeek) * WEEKS_PER_MONTH), per_year: round2((base.per_week + extraWeek) * 52) },
       growth: base.per_month ? round2((extraWeek / base.per_week) * 100) : null,
     };

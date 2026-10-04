@@ -229,6 +229,10 @@ try {
   readback.projection = { screen: await text("[data-testid=proj-extra-month]"), expected: p3.extra.per_month };
   check("projection", "3 students × 2 classes × 1½ h at $ 1.000 → the screen shows the registry's monthly extra", readback.projection.screen === `+ ${money(p3.extra.per_month)}` && (await text("[data-testid=proj-total-month]")) === money(p3.total.per_month), JSON.stringify(readback.projection));
   check("projection", "the green 'nuevos' bar grows with it", await page.$eval(".seg-new", (el) => parseFloat(el.style.width) > 0));
+  const perDay = await text("[data-testid=proj-per-day]");
+  const fmt5 = (h) => { const m = Math.round((h * 60) / 5) * 5, hh = Math.floor(m / 60), mm = m % 60; return !hh ? `${mm} min` : mm === 30 ? `${hh}½ h` : mm ? `${hh} h ${mm}` : `${hh} h`; };
+  readback.perDay = { screen: perDay, total: p3.total.hours_per_day, base: p3.base.hours_per_day };
+  check("projection", "hours per day over a 5-day week, all students, today vs with the new ones", Math.abs(p3.total.hours_per_day - p3.total.hours_per_week / 5) < 0.01 && perDay.includes(`Serían ${fmt5(p3.total.hours_per_day)} por día`) && perDay.includes(`(hoy ${fmt5(p3.base.hours_per_day)})`), JSON.stringify(readback.perDay));
   await shot("09-proyeccion");
 
   // ── F8 currency switch and exchange rate ──
