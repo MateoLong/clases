@@ -187,7 +187,7 @@ function viewAgenda(params) {
           ${thisWeek ? "" : `<a class="btn btn-line btn-sm" href="#/agenda">Hoy</a>`}
           <button type="button" class="btn btn-go btn-extra" data-act="open-extra" data-testid="extra-toggle" aria-expanded="${extraOpen}" ${students.length ? "" : "disabled"}>${icon("calendar-plus")}Clase extra</button>
         </div>
-        <p class="week-strip" data-testid="week-strip"><span><strong>${money(week.earned)}</strong> ${past ? "ganados" : "ganados"}</span>${past ? "" : `<span>faltan <strong>${money(week.expected)}</strong></span>`}<span>total <strong>${money(week.total)}</strong></span>${reg.owing().length ? `<a href="#owing">te deben <strong>${money(reg.owing().reduce((n, o) => n + o.owes_display, 0))}</strong></a>` : ""}</p>
+        <p class="week-strip" data-testid="week-strip"><span><strong>${money(week.earned)}</strong> ganados</span>${past ? "" : `<span>faltan <strong>${money(week.expected)}</strong></span>`}<span>total <strong>${money(week.total)}</strong></span>${reg.owing().length ? `<a href="#owing">te deben <strong>${money(reg.owing().reduce((n, o) => n + o.owes_display, 0))}</strong></a>` : ""}</p>
         ${extraOpen ? `<section class="panel extra-panel">${extraForm(students, thisWeek ? today : from)}</section>` : ""}
         <div class="board" style="--days:${days.length}" data-testid="board">
           ${days.map((d) => {
@@ -201,7 +201,7 @@ function viewAgenda(params) {
       </section>
       <aside class="rail" aria-label="Resumen">
         <section class="panel rail-week" data-testid="week-money">
-          <h2>${past ? "Esa semana" : thisWeek ? "Esta semana" : "Esa semana"}</h2>
+          <h2>${thisWeek ? "Esta semana" : "Esa semana"}</h2>
           <p class="hero-figure" data-testid="week-earned">${money(week.earned)}</p>
           <p class="muted hero-sub">${past ? "ganados" : week.earned ? "ya ganados" : "ganados por ahora"}</p>
           ${week.total ? `<div class="meter" role="img" aria-label="${Math.round((week.earned / week.total) * 100)}% de la semana"><span style="width:${(week.earned / week.total) * 100}%"></span></div>` : ""}
@@ -570,7 +570,7 @@ function viewAlumno(id) {
 
 // ══ GANANCIAS ══════════════════════════════════════════════════════════
 const C_EARNED = "#2347b5";   // dado (validated pair, dataviz)
-const C_EXPECTED = "#6d8cf0"; // previsto
+const C_EXPECTED = "#6d8cf0"; // agendado
 
 /** A clean axis: four steps of 1, 2 or 5 × a power of ten, covering v. */
 function niceAxis(v) {
@@ -757,7 +757,7 @@ function viewProyeccion() {
         <div class="pbar-row"><span class="pbar-label">Hoy</span><span class="pbar-track"><span class="pbar seg-base" style="width:${(p.base.per_month / max) * 100}%"></span></span><span class="pbar-value">${money(p.base.per_month)}</span></div>
         <div class="pbar-row"><span class="pbar-label">Con ${p.extra.students} más</span><span class="pbar-track"><span class="pbar seg-base" style="width:${(p.base.per_month / max) * 100}%"></span><span class="pbar seg-new" style="width:${(p.extra.per_month / max) * 100}%"></span></span><span class="pbar-value" data-testid="proj-total-month">${money(p.total.per_month)}</span></div>
       </div>
-      <ul class="legend"><li><i style="background:${C_EARNED}"></i>Tus clases de hoy</li><li><i style="background:#21804a"></i>Alumnos nuevos</li></ul>
+      <ul class="legend"><li><i style="background:${C_EARNED}"></i>Tus clases de hoy</li><li><i style="background:var(--f-pasto)"></i>Alumnos nuevos</li></ul>
       <dl class="stats proj-stats">
         <div><dt>Por semana</dt><dd>+ ${money(p.extra.per_week)}</dd></div>
         <div><dt>Por año</dt><dd data-testid="proj-extra-year">+ ${money(p.extra.per_year)}</dd></div>

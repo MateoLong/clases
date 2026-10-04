@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T00:09:12+00:00",
-  "title": "Design System: Biblioteca",
+  "generatedAt": "2026-10-04T02:01:39+00:00",
+  "title": "Design System: Mis clases",
   "extensions": {
     "colorMeta": {
       "moña": {
@@ -419,6 +419,22 @@
           "#b9c4e0",
           "#e8eefe"
         ]
+      },
+      "chart-agendado": {
+        "role": "tertiary",
+        "displayName": "Agendado Cobalt",
+        "canonical": "#6d8cf0",
+        "tonalRamp": [
+          "#071645",
+          "#0c2678",
+          "#1236ab",
+          "#1746de",
+          "#466dec",
+          "#7e99f2",
+          "#b5c5f7",
+          "#e8edfd"
+        ],
+        "note": "Chart only: booked future money stacked above Ganado (moña). Validated pair with the dataviz script."
       }
     },
     "typographyMeta": {
@@ -449,6 +465,14 @@
       "hand-input": {
         "displayName": "Hand (writing line)",
         "purpose": "The lend form's handwritten fields and the due date being set."
+      },
+      "lead-figure": {
+        "displayName": "Lead figure",
+        "purpose": "The one big money figure a page leads with (2.5rem rail, 3rem Ganancias, 3.5rem ¿Y si…?, 2.75rem under 860px). Ink; Tomate Ink when owed; Pasto Ink for projected growth."
+      },
+      "clase-time": {
+        "displayName": "Class time",
+        "purpose": "The time on a class label."
       }
     },
     "shadows": [
@@ -486,6 +510,21 @@
         "name": "focus-halo",
         "value": "0 0 0 4px var(--moña-soft)",
         "purpose": "Box input focus."
+      },
+      {
+        "name": "clase-frame",
+        "value": "inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px color-mix(in srgb, var(--c) 45%, white), 0 1px 3px rgba(23,47,122,.14)",
+        "purpose": "Mis clases: the slimmer etiqueta frame on class and debtor labels; hover and selection swap the drop for shadow-2."
+      },
+      {
+        "name": "today-ring",
+        "value": "0 0 0 2px var(--moña), var(--shadow-1)",
+        "purpose": "Mis clases: today's column on the week board."
+      },
+      {
+        "name": "range-thumb",
+        "value": "0 2px 6px rgba(23,47,122,.3)",
+        "purpose": "Mis clases: the Girasol slider thumb."
       }
     ],
     "motion": [
@@ -523,16 +562,33 @@
         "name": "reduced-motion",
         "value": "durations .01ms",
         "purpose": "prefers-reduced-motion collapses all animation."
+      },
+      {
+        "name": "stamp",
+        "value": ".42s ease-out keyframes: opacity 0 scale 1.8 → opacity 1 scale .94 (55%) → scale 1",
+        "purpose": "Mis clases signature: PAGADO pressed onto a debtor label. Reduced motion shows it without the press."
+      },
+      {
+        "name": "instant-press",
+        "value": "no background/color transition on pressed state; border-color .15s only",
+        "purpose": "Mis clases: chips switch pressed state at once."
+      },
+      {
+        "name": "no-width",
+        "value": "width is never transitioned",
+        "purpose": "Mis clases: bars, meters and projections jump to their new length. No bounce or elastic easing anywhere."
       }
     ],
     "breakpoints": [
       {
-        "name": "desk-stack",
-        "value": "1080px"
+        "name": "desk-stack / week-first",
+        "value": "1080px",
+        "purpose": "Biblioteca desk stacks; Mis clases: the week comes first, day columns become rows, rail money becomes one line."
       },
       {
         "name": "compact",
-        "value": "860px"
+        "value": "860px",
+        "purpose": "Band wraps, tabs become an icon-over-label grid; the currency switch shares the band's first row."
       },
       {
         "name": "etiqueta-stacked (container)",
@@ -632,27 +688,74 @@
       "description": "Ink confirmation with a sunflower undo instead of a confirm dialog.",
       "html": "<div class=\"ds-toast\"><p>Devuelto: Matilda</p><button>Deshacer</button></div>",
       "css": ".ds-toast{display:flex;align-items:center;gap:12px;max-width:560px;padding:12px 12px 12px 18px;border-radius:16px;background:var(--ink);color:#fff;font-family:var(--font-body);box-shadow:var(--shadow-2)} .ds-toast p{flex:1;margin:0} .ds-toast button{min-height:38px;padding:8px 18px;border:0;border-radius:999px;background:var(--girasol);color:var(--ink);font-family:var(--font-ui);font-weight:700;cursor:pointer} .ds-toast button:hover{background:var(--girasol-hover)} .ds-toast button:focus-visible{outline:3px solid var(--girasol);outline-offset:2px}"
+    },
+    {
+      "name": "Class Label",
+      "kind": "custom",
+      "refersTo": "clase-label",
+      "description": "Mis clases signature: a class as a small etiqueta in its student's ink; given, cancelled and selected states.",
+      "html": "<div style=\"display:grid;gap:8px;width:180px\"><button class=\"ds-clase\" style=\"--c:#2f5bd3\"><span class=\"ds-clase-top\"><span class=\"ds-clase-time\">17:00</span><span class=\"ds-clase-dur\">1 h</span></span><span class=\"ds-clase-name\">Martina López</span><span class=\"ds-clase-foot\"><span class=\"ds-amount\">$ 800</span><span class=\"ds-state ds-given\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>dada</span></span></button><button class=\"ds-clase ds-cancelled\" style=\"--c:#d23f2d\"><span class=\"ds-clase-top\"><span class=\"ds-clase-time\">18:30</span><span class=\"ds-clase-dur\">1½ h</span></span><span class=\"ds-clase-name\">Joaquín Pereira</span><span class=\"ds-clase-foot\"><span class=\"ds-amount\">—</span><span class=\"ds-state ds-cx\">cancelada</span></span></button></div>",
+      "css": ".ds-clase{--c:#2f5bd3;display:grid;gap:2px;width:100%;text-align:left;cursor:pointer;background:var(--paper,#fff);color:var(--ink,#1b2340);border-radius:10px;border:2px solid var(--c);box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px color-mix(in srgb,var(--c) 45%,white),0 1px 3px rgba(23,47,122,.14);padding:7px 9px 8px;font-family:'Atkinson Hyperlegible',system-ui,sans-serif;transition:transform .15s cubic-bezier(.16,1,.3,1),box-shadow .15s cubic-bezier(.16,1,.3,1)}.ds-clase:hover{transform:translateY(-1px);box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px color-mix(in srgb,var(--c) 45%,white),0 2px 4px rgba(23,47,122,.08),0 10px 24px rgba(23,47,122,.12)}.ds-clase:focus-visible{outline:3px solid #2347b5;outline-offset:2px}.ds-clase-top,.ds-clase-foot{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:.8125rem}.ds-clase-time{font-family:'Baloo 2',system-ui,sans-serif;font-weight:800;font-size:1.1875rem;line-height:1}.ds-clase-dur{font-weight:700;color:#47527a}.ds-clase-name{font-family:'Patrick Hand',cursive;font-size:1.1875rem;line-height:1.1;color:#172f7a}.ds-amount{font-weight:700;font-variant-numeric:tabular-nums}.ds-state{font-weight:700;color:#47527a}.ds-given{color:#1c6f3e}.ds-cancelled{border-style:dashed;background:#f6f7fb}.ds-cancelled .ds-clase-time,.ds-cancelled .ds-clase-name{text-decoration:line-through;text-decoration-thickness:2px;color:#47527a}.ds-cx{color:#a8241b}.ds-state{display:inline-flex;align-items:center;gap:3px}"
+    },
+    {
+      "name": "Debtor Label with PAGADO Stamp",
+      "kind": "custom",
+      "refersTo": "debtor-label",
+      "description": "Mis clases signature: a debtor on a label in their ink; paying stamps PAGADO across it.",
+      "html": "<div style=\"display:grid;gap:8px;width:280px\"><div class=\"ds-owe\" style=\"--c:#6a4bc8\"><span class=\"ds-dot\"></span><span class=\"ds-owe-name\">Bruno Rodríguez</span><span class=\"ds-owe-amt\">$ 7.500</span><button class=\"ds-owe-btn\">Cobrar</button></div><div class=\"ds-owe ds-paid\" style=\"--c:#21804a\"><span class=\"ds-dot\"></span><span class=\"ds-owe-name\">Sofía González</span><span class=\"ds-owe-amt\">$ 850</span><button class=\"ds-owe-btn\">Cobrar</button><span class=\"ds-stamp\">Pagado</span></div></div>",
+      "css": ".ds-owe{position:relative;display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:'dot name name' 'dot amt btn';align-items:center;gap:2px 10px;padding:8px 10px;border-radius:10px;border:2px solid var(--c);background:#fff;box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 3.5px color-mix(in srgb,var(--c) 45%,white)}.ds-dot{grid-area:dot;width:12px;height:12px;border-radius:50%;background:var(--c)}.ds-owe-name{grid-area:name;font-family:'Patrick Hand',cursive;font-size:1.25rem;line-height:1.1;color:#172f7a}.ds-owe-amt{grid-area:amt;font-weight:700;color:#a8241b;font-variant-numeric:tabular-nums;font-family:'Atkinson Hyperlegible',sans-serif}.ds-owe-btn{grid-area:btn;min-height:36px;padding:6px 12px;border-radius:999px;border:2px solid #b9c4e0;background:#fff;color:#1b2340;font:700 .9375rem 'Baloo 2',sans-serif;cursor:pointer;transition:border-color .15s,color .15s}.ds-owe-btn:hover{border-color:#2347b5;color:#172f7a}.ds-owe-btn:focus-visible{outline:3px solid #2347b5;outline-offset:2px}.ds-paid .ds-owe-amt{color:#47527a;text-decoration:line-through}.ds-stamp{position:absolute;left:34%;top:50%;translate:-50% -50%;rotate:-12deg;font:800 1.375rem 'Baloo 2',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#1c6f3e;border:3px solid #1c6f3e;border-radius:8px;padding:0 10px;background:color-mix(in srgb,white 70%,transparent);animation:ds-stamp .42s cubic-bezier(.16,1,.3,1) both}@keyframes ds-stamp{0%{opacity:0;scale:1.8}55%{opacity:1;scale:.94}100%{opacity:1;scale:1}}@media (prefers-reduced-motion:reduce){.ds-stamp{animation:none}}"
+    },
+    {
+      "name": "Currency Switch",
+      "kind": "nav",
+      "refersTo": "currency-switch",
+      "description": "Mis clases: UYU / USD switch in the cobalt band.",
+      "html": "<div style=\"background:#2347b5;padding:12px;display:inline-block;border-radius:12px\"><div class=\"ds-cur\"><button aria-pressed=\"true\">UYU</button><button aria-pressed=\"false\">USD</button></div></div>",
+      "css": ".ds-cur{display:inline-grid;grid-template-columns:1fr 1fr;background:rgba(255,255,255,.14);border-radius:999px;padding:4px}.ds-cur button{border:0;background:transparent;color:#fff;border-radius:999px;min-height:36px;padding:4px 14px;font:700 .9375rem 'Baloo 2',sans-serif;cursor:pointer;transition:background-color .18s cubic-bezier(.16,1,.3,1),color .18s cubic-bezier(.16,1,.3,1)}.ds-cur button[aria-pressed=true]{background:#fff;color:#172f7a}.ds-cur button:focus-visible{outline:3px solid #ffc53d;outline-offset:2px}"
+    },
+    {
+      "name": "Rate Slider",
+      "kind": "input",
+      "refersTo": "range-thumb",
+      "description": "Mis clases: cobalt fill to the value, a sunflower thumb she presses.",
+      "html": "<input type=\"range\" class=\"ds-range\" min=\"0\" max=\"100\" value=\"35\" style=\"--p:35%;width:280px\">",
+      "css": ".ds-range{height:36px;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}.ds-range::-webkit-slider-runnable-track{height:10px;border-radius:999px;background:linear-gradient(to right,#2347b5 var(--p),#dfe7fb var(--p))}.ds-range::-moz-range-track{height:10px;border-radius:999px;background:#dfe7fb}.ds-range::-moz-range-progress{height:10px;border-radius:999px;background:#2347b5}.ds-range::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:32px;margin-top:-11px;border-radius:50%;background:#ffc53d;border:3px solid #fff;box-shadow:0 2px 6px rgba(23,47,122,.3)}.ds-range::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:#ffc53d;border:3px solid #fff;box-shadow:0 2px 6px rgba(23,47,122,.3)}.ds-range:focus-visible{outline:none}.ds-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px #dfe7fb,0 0 0 6px #2347b5}"
+    },
+    {
+      "name": "Projection Bars",
+      "kind": "custom",
+      "refersTo": "chart-agendado",
+      "description": "Mis clases: Hoy vs Con N más, validated pair moña / f-pasto; bars jump, never animate width.",
+      "html": "<div class=\"ds-pbars\"><div class=\"ds-prow\"><span>Hoy</span><span class=\"ds-ptrack\"><span class=\"ds-pbar ds-base ds-end\" style=\"width:50%\"></span></span><b>$ 40.733</b></div><div class=\"ds-prow\"><span>Con 3 más</span><span class=\"ds-ptrack\"><span class=\"ds-pbar ds-base\" style=\"width:50%\"></span><span class=\"ds-pbar ds-new ds-end\" style=\"width:48%\"></span></span><b>$ 79.733</b></div></div>",
+      "css": ".ds-pbars{display:grid;gap:10px;width:420px;font-family:'Atkinson Hyperlegible',sans-serif;color:#1b2340}.ds-prow{display:grid;grid-template-columns:90px minmax(0,1fr) auto;align-items:center;gap:12px;font-weight:700}.ds-prow b{font:800 1.125rem 'Baloo 2',sans-serif;font-variant-numeric:tabular-nums}.ds-ptrack{display:flex;gap:2px;height:24px}.ds-pbar{display:block;height:24px}.ds-base{background:#2347b5}.ds-new{background:#21804a}.ds-end{border-radius:0 4px 4px 0}"
     }
   ],
   "narrative": {
     "northStar": "Forro y etiqueta",
-    "overview": "Every book in this library wears its school contact-paper forro, and every loan is an etiqueta escolar filled in by hand. The system is built from those two school objects: saturated colour fields with a faint repeating print stand for books, and white name labels with a rounded double frame stand for loans. Everything else (tables, fields, panels) recedes onto a cool túnica-white ground so the books carry the colour.\n\nIt is an operating tool for one librarian at a counter with a queue of children, so density is moderate and every target is large (44px minimum, 56px for the lend action). The children watching see a cheerful wall of covered books; the librarian sees exact dates, codes and states in a hyperlegible face. Cuteness comes from the materials (forros, labels, handwriting), never from emoji or pastel cards.\n\nThe cobalt \"moña\" forro runs across the top as the app's own band, with the same star print the books use. Sunflower yellow is the one action colour.",
+    "overview": "Every book in this library wears its school contact-paper forro, and every loan is an etiqueta escolar filled in by hand. The system is built from those two school objects: saturated colour fields with a faint repeating print stand for books, and white name labels with a rounded double frame stand for loans. Everything else (tables, fields, panels) recedes onto a cool túnica-white ground so the books carry the colour.\n\nIt is an operating tool for one librarian at a counter with a queue of children, so density is moderate and every target is large (44px minimum, 56px for the lend action). The children watching see a cheerful wall of covered books; the librarian sees exact dates, codes and states in a hyperlegible face. Cuteness comes from the materials (forros, labels, handwriting), never from emoji or pastel cards.\n\nThe cobalt \"moña\" forro runs across the top as the app's own band, with the same star print the books use. Sunflower yellow is the one action colour.\n\nMis clases carries the same world to one tutor on an iPad. Her week is a board of school labels: each class is a small etiqueta stuck on its day, framed in its student's forro ink, with the student's name written in handwriting, the time big in Baloo and the amount in tabular Atkinson. Money sits in a rail beside the week: what she has earned, what is still to come, and who owes her, each debtor written on a label of their own that gets stamped PAGADO when she is paid.",
     "keyCharacteristics": [
       "Book identity is a forro colour plus a print, stable for that book on every screen.",
       "Loans render as an etiqueta stuck on the book's forro; names and dates on it are in handwriting.",
       "One action colour (sunflower), used only where something can be pressed.",
       "Soft, navy-tinted, blurred shadows; pill-shaped controls; a spine-side corner on every forro.",
-      "Spanish (UY) throughout; dates read dd/mm."
+      "Spanish (UY) throughout; dates read dd/mm.",
+      "Mis clases: each student keeps one stored forro ink everywhere (labels, avatars, debtor labels, chart legends); classes are etiquetas on a week board, money is a rail beside it.",
+      "Mis clases: one lead figure per page; charts are hand-built SVG in the shell's cobalt family."
     ],
     "rules": [
       {
         "name": "The Pressable Sunflower Rule",
-        "body": "Full-strength Girasol (`#ffc53d`) appears only on things that can be pressed. If it is not a button, link or focus ring, it is not Girasol. The Girasol forro (`f-girasol`) is a book colour, and Girasol Soft is a warning tint; neither is the action colour.",
+        "body": "Full-strength Girasol (`#ffc53d`) appears only on things that can be pressed. If it is not a button, link or focus ring, it is not Girasol. In Mis clases that means the Clase extra button (and the other Go buttons), the toast's Deshacer after Cobrar, and the rate slider's thumb. The Girasol forro (`f-girasol`) is a book colour, and Girasol Soft is a warning tint; neither is the action colour.",
         "section": "colors"
       },
       {
         "name": "The Forro Is Identity Rule",
         "body": "A book's forro colour and print are derived from its id and never change between screens. Never colour a book by state; state goes on the etiqueta, the late flag or a pill.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Ink Per Student Rule",
+        "body": "(Mis clases) A student's forro ink is chosen once (least used first) and stored; every surface that shows that student uses it. Never pick a student's colour by state, amount or position.",
         "section": "colors"
       },
       {
@@ -671,9 +774,24 @@
         "section": "typography"
       },
       {
+        "name": "The Week First Rule",
+        "body": "(Mis clases) In portrait the week comes first and the week's money is one line above it, never a stack of panels pushing the classes below the fold.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Lead Figure Rule",
+        "body": "(Mis clases) Each page leads with exactly one large figure (week earned, month earned, the student's balance, the projected gain); every other number sits in a sentence, a stats list or a chart. No rows of stat tiles.",
+        "section": "layout"
+      },
+      {
         "name": "The Soft Lift Rule",
         "body": "Every shadow is blurred and tinted. No hard zero-blur offset shadows anywhere. (The etiqueta's inset rings are zero-offset spread rings that draw its double frame, not shadows.)",
         "section": "elevation"
+      },
+      {
+        "name": "The Agendado Word Rule",
+        "body": "(Mis clases) Future money is called \"Agendado\" everywhere it is shown (legends, tooltips, tables, sentences). Never \"previsto\", \"pendiente\" or \"esperado\".",
+        "section": "components"
       },
       {
         "name": "The Matching Frame Rule",
@@ -687,22 +805,32 @@
       }
     ],
     "dos": [
-      "**Do** derive a book's forro colour and print from its id and reuse them on every surface that shows that book.",
-      "**Do** frame each etiqueta in the colour of the forro it sits on.",
-      "**Do** keep forro prints at white .14 alpha or less, and switch titles to ink on Girasol and Naranja forros.",
-      "**Do** keep Girasol for things that can be pressed: one Go button per context, the toast's undo, the home mark.",
-      "**Do** write names, grades and dates on etiquetas in Patrick Hand; keep everything else in Baloo 2 or Atkinson Hyperlegible.",
-      "**Do** show dates as dd/mm, with the weekday spelled out wherever a date is being set.",
-      "**Do** use blurred, Moña-tinted shadows: Rest for surfaces, Lift for what responds.",
-      "**Do** keep touch targets at 44px or more and the lend action at 56px."
+      "Do derive a book's forro colour and print from its id and reuse them on every surface that shows that book.",
+      "Do frame each etiqueta in the colour of the forro it sits on.",
+      "Do keep forro prints at white .14 alpha or less, and switch titles to ink on Girasol and Naranja forros.",
+      "Do keep Girasol for things that can be pressed: one Go button per context, the toast's undo, the home mark.",
+      "Do write names, grades and dates on etiquetas in Patrick Hand; keep everything else in Baloo 2 or Atkinson Hyperlegible.",
+      "Do show dates as dd/mm, with the weekday spelled out wherever a date is being set.",
+      "Do use blurred, Moña-tinted shadows: Rest for surfaces, Lift for what responds.",
+      "Do keep touch targets at 44px or more and the lend action at 56px.",
+      "Do give each student one forro ink when added (least used first), store it, and frame their class and debtor labels and fill their avatar with it; switch initials to Ink on Girasol and Naranja.",
+      "Do lead each page with one figure and put the rest in sentences, stats lists or charts.",
+      "Do put the week first in portrait, with the week's money as one line above it.",
+      "Do use the validated chart pairs: Ganado `#2347b5` with Agendado `#6d8cf0`; Hoy `#2347b5` with Nuevos `#21804a`; per-student bars in one hue.",
+      "Do call future money \"Agendado\".",
+      "Do switch pressed states (chips, segments, the currency switch) instantly."
     ],
     "donts": [
-      "**Don't** use hard zero-blur offset shadows.",
-      "**Don't** put an inset side stripe on a forro; the forro's colour and print are the whole identity.",
-      "**Don't** use Girasol on non-pressable surfaces, labels, headings or decoration.",
-      "**Don't** nest cards: the counter is the forro itself, not a panel holding one.",
-      "**Don't** colour a book by its state; state lives on the etiqueta, the late flag and pills.",
-      "**Don't** use Patrick Hand for headings, buttons or table data."
+      "Don't use hard zero-blur offset shadows.",
+      "Don't put an inset side stripe on a forro; the forro's colour and print are the whole identity.",
+      "Don't use Girasol on non-pressable surfaces, labels, headings or decoration.",
+      "Don't nest cards: the counter is the forro itself, not a panel holding one.",
+      "Don't colour a book by its state; state lives on the etiqueta, the late flag and pills.",
+      "Don't use Patrick Hand for headings, buttons or table data.",
+      "Don't build rows of stat tiles.",
+      "Don't colour per-student bars by the student's ink; the dot carries identity.",
+      "Don't use bounce or elastic easing; everything uses `cubic-bezier(.16,1,.3,1)`.",
+      "Don't transition `width`; bars, meters and projections jump to their new length."
     ]
   }
 }
