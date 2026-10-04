@@ -1,6 +1,6 @@
 // Keeps a copy of the app on the iPad so it opens without internet.
 // Bump VERSION whenever any file below changes, so the iPad picks up the new version.
-const VERSION = "mis-clases-v2";
+const VERSION = "mis-clases-v3";
 const FILES = [
   "./", "index.html", "styles.css", "clases.css", "app.js", "store.js", "registry.js", "demo-data.js", "xlsx.js",
   "icons.svg", "favicon.svg", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png",

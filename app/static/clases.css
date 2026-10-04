@@ -272,8 +272,9 @@
   .detail-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
-  .band-inner { display: grid; grid-template-columns: 1fr auto; }
+  .band-inner { display: grid; grid-template-columns: 1fr auto auto; }
   .currency-switch { grid-row: 1; grid-column: 2; }
+  .help-link { grid-row: 1; grid-column: 3; }
   .tabs { grid-column: 1 / -1; }
   .rail { grid-template-columns: 1fr; }
   .grid-student, .grid-slot, .row-2 { grid-template-columns: 1fr; }

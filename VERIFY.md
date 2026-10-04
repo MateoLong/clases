@@ -19,6 +19,7 @@ There are no PRs (solo project committed to `main`), so verdicts are recorded he
 |---|---|---|---|
 | 2026-10-04 | First version | unit 23 (10 planted bugs caught), e2e 65/65 | Verifier **FAIL**: a class already given today was lost when a slot was ended, changed or archived from today, plus 4 should-fixes. All were reproduced as failing tests, then fixed. Re-verify **PASS+NOTES**: a rate typed "39,875" was read ×1000, and a stale Deshacer survived; both fixed and tested. Impeccable finish review: fix (8 items) → **ship**. |
 | 2026-10-04 | Hours per day in ¿Y si…? | unit 30, e2e 72/72 | Small change; no fresh independent run. Live-checked on an emulated iPad. |
+| 2026-10-04 | "Cómo se usa" help screen (`#/ayuda`, "?" in the band after UYU/USD), next-step hints in two empty lists | unit 30, e2e 80/80 (new checks mutated red, then reverted) | Verifier **PASS+NOTES**: four help steps were not fully true (portrait has no "Esta semana" panel; backup nudge also shows when no copy exists; a moved extra class has no "Volver a su día"; ¿Y si…? rate is for new students) → reworded. The two empty-list hints have no e2e check yet. |
 
 ## Open items
 

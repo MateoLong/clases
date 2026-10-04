@@ -74,6 +74,7 @@ try {
   // ── F1 first run → demo ──
   await go("agenda");
   check("first-run", "empty app shows the welcome state", await page.isVisible("[data-testid=first-run]"));
+  check("help", "welcome state points to Cómo se usa", await page.isVisible("[data-testid=first-run] a[href='#/ayuda']"));
   await shot("01-first-run");
   await page.tap("[data-action=load-demo]");
   await page.waitForSelector("[data-testid=clase]");
@@ -87,6 +88,19 @@ try {
   await page.waitForSelector("[data-testid=clase]");
   check("persistence", "after closing and reopening, everything is still there", (await page.$$("[data-testid=clase]")).length === 8);
   await shot("02-agenda");
+
+  // ── F1b help: the "?" opens Cómo se usa, reads only, and its links lead back to the screens ──
+  const beforeHelp = JSON.stringify(await saved());
+  await page.tap("[data-testid=help-link]");
+  await page.waitForSelector("[data-testid=help-semana]");
+  const cards = await page.$$eval("[data-testid^=help-]:not([data-testid=help-link])", (els) => els.map((e) => e.dataset.testid.slice(5)));
+  check("help", "'?' opens the 8 help cards", cards.join(",") === "semana,cambiar,extra,cobrar,alumnos,ganancias,copia,probar", cards.join(","));
+  check("help", "the '?' is marked as the current page", (await page.getAttribute("[data-testid=help-link]", "aria-current")) === "page");
+  await shot("02b-ayuda");
+  await page.tap("[data-testid=help-extra] a[href='#/agenda']");
+  await page.waitForSelector("[data-testid=extra-toggle]");
+  check("help", "'Ir a la Agenda' lands on the week", page.url().endsWith("#/agenda"), page.url());
+  check("help", "reading the help writes nothing to the device", JSON.stringify(await saved()) === beforeHelp);
 
   // ── F2 add a student with a weekly slot ──
   await go("alumnos");
@@ -313,7 +327,7 @@ try {
   await demoCtx.page.locator("[data-testid=clase]").nth(2).tap();
   await demoCtx.page.waitForSelector("[data-testid=selected-class]");
   check("layout", "portrait: a tapped class's actions open right under its day", await demoCtx.page.$eval("[data-testid=selected-class]", (p) => p.previousElementSibling?.classList.contains("day")));
-  const routes = ["agenda", "alumnos", "alumnos/1", "ganancias", "ganancias?ver=semanas", "proyeccion", "ajustes"];
+  const routes = ["agenda", "alumnos", "alumnos/1", "ganancias", "ganancias?ver=semanas", "proyeccion", "ajustes", "ayuda"];
   for (const width of [820, 744]) {
     await demoCtx.page.setViewportSize({ width, height: 1180 });
     for (const r of routes) {

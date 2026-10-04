@@ -365,6 +365,7 @@ function firstRun() {
       <a class="btn btn-go" href="#/alumnos?nuevo=1">${icon("user-plus")}Agregar un alumno</a>
       <button type="button" class="btn btn-line" data-action="load-demo">${icon("sparkles")}Probar con datos de ejemplo</button>
     </div>
+    <p>¿Primera vez? Mirá <a href="#/ayuda">cómo se usa</a>, paso por paso.</p>
   </div>`;
 }
 function wireFirstRun() {
@@ -529,7 +530,7 @@ function viewAlumno(id) {
 
       <section class="panel" data-testid="student-classes">
         <h2>Próximas clases</h2>
-        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? "cancelada" : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span></li>`).join("")}</ul>` : `<p class="muted">No hay clases en las próximas 4 semanas.</p>`}
+        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? "cancelada" : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span></li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
         <h3 class="sub-h">Últimas clases</h3>
         ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `cancelada · ${moneyIn(c.amount, c.currency)}` : "cancelada") : moneyIn(c.amount, c.currency)}</span></li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
       </section>
@@ -690,7 +691,7 @@ function viewGanancias(params) {
       ${byStudent.length ? `<ul class="hbars" data-testid="by-student">${byStudent.map((s) => `<li>
           <span class="hbar-name"><span class="swatch-dot" style="--c:${ink(s.id)}" aria-hidden="true"></span>${esc(s.name)}</span>
           <span class="hbar-track"><span class="hbar" style="width:${(s.amount / maxS) * 100}%"></span></span>
-          <span class="hbar-value">${money(s.amount)}</span></li>`).join("")}</ul>` : `<p class="muted">Todavía no hay clases este mes.</p>`}
+          <span class="hbar-value">${money(s.amount)}</span></li>`).join("")}</ul>` : `<p class="muted">Todavía no hay clases este mes.${reg.state.students.length ? "" : ` Cuando agregues alumnos con su día de clase en <a href="#/alumnos">Alumnos</a>, aparecen acá.`}</p>`}
     </section>`;
   const box = $("#col-chart");
   columnChart(box, items);
@@ -849,6 +850,60 @@ function viewAjustes() {
   wireFirstRun();
 }
 
+// ══ AYUDA ══════════════════════════════════════════════════════════════
+// Plain cards she can come back to when she forgets a step. No data is touched here.
+function viewAyuda() {
+  const card = (id, ic, title, steps, link) => `<section class="panel help-card" aria-labelledby="h-${id}" data-testid="help-${id}">
+    <h2 id="h-${id}"><span class="help-icon">${icon(ic)}</span>${title}</h2>
+    <ol class="help-steps">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+    ${link ? `<a class="btn btn-line btn-sm" href="${link[0]}">${link[1]}</a>` : ""}
+  </section>`;
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Cómo se usa</h1><p>Lo de todos los días, paso por paso. Si algo no sale, volvé acá con el botón <strong>?</strong> de arriba.</p></div></div>
+    <div class="help-grid">
+      ${card("semana", "calendar-days", "Tu semana", [
+        "La <strong>Agenda</strong> abre en esta semana, con hoy marcado. Con <strong>‹ ›</strong> pasás de semana; <strong>Hoy</strong> te trae de vuelta.",
+        "Cada clase es una etiqueta en su día. Cuando termina su horario queda como <strong>dada</strong> y cuenta como ganada.",
+        "Arriba de la semana (o en <strong>Esta semana</strong>, con el iPad acostado) ves lo ganado, lo que falta y el total.",
+      ], ["#/agenda", "Ir a la Agenda"])}
+      ${card("cambiar", "calendar-x", "Cancelar o mover una clase", [
+        "En la <strong>Agenda</strong>, tocá la clase.",
+        "Elegí <strong>Cancelar</strong> (no se cobra) o <strong>Cancelar y cobrar igual</strong>. Para cambiarla de día: <strong>Mover</strong>, escribí el día y la hora nuevos y tocá <strong>Mover la clase</strong>.",
+        "Si la cancelaste o la moviste y querés dejarla como era, tocala y elegí <strong>Volver a su día y hora</strong>. (Una clase extra que moviste no tiene ese botón: movela de nuevo.)",
+        "¿Te equivocaste? Tocá <strong>Deshacer</strong> en el aviso que aparece abajo.",
+      ], ["#/agenda", "Ir a la Agenda"])}
+      ${card("extra", "calendar-plus", "Anotar una clase extra", [
+        "En la <strong>Agenda</strong>, tocá el botón amarillo <strong>Clase extra</strong>.",
+        "Elegí con quién, el día, la hora y cuánto dura, y tocá <strong>Agregar</strong>.",
+      ], ["#/agenda", "Ir a la Agenda"])}
+      ${card("cobrar", "hand-coins", "Cobrar", [
+        "En la Agenda, <strong>Te deben</strong> muestra quién te debe y cuánto. <strong>Cobrar</strong> anota que te pagó todo lo que debía.",
+        "Si te pagó una parte: entrá a su ficha en <strong>Alumnos</strong>, escribí lo que pagó y tocá <strong>Registrar pago</strong>.",
+        "¿Anotaste mal un pago? Borralo con la <strong>✕</strong> en la lista de pagos de su ficha.",
+      ])}
+      ${card("alumnos", "user-plus", "Alumnos y tarifas", [
+        "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por hora (en pesos o dólares) y su día y hora de clase.",
+        "En su ficha podés agregar otro día, cambiarlo o quitarlo.",
+        "Para subirle la tarifa, usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",
+        "Si deja de venir, <strong>Archivar</strong> quita sus clases que vienen. Lo que te debe y su historial quedan.",
+      ], ["#/alumnos", "Ir a Alumnos"])}
+      ${card("ganancias", "chart-column", "Ganancias, ¿Y si…? y dólares", [
+        "<strong>Ganancias</strong> muestra lo ganado y lo agendado por mes o por semana. Una clase cancelada solo cuenta si la cobrás igual.",
+        "<strong>¿Y si…?</strong> sirve para jugar: elegí cuántos alumnos nuevos, cuántas clases y a qué tarifa, y mirá cuánto cambia tu mes.",
+        "Arriba a la derecha, <strong>UYU / USD</strong> pasa todo a pesos o a dólares, con la cotización que pusiste en Ajustes.",
+      ], ["#/ganancias", "Ver Ganancias"])}
+      ${card("copia", "download", "Guardar una copia de seguridad", [
+        "Todo está guardado solo en este iPad. Una vez por semana, tocá <strong>Ajustes → Guardar copia de seguridad</strong>. El archivo queda en la app Archivos: mandátelo por mail o a Drive, así no se pierde si le pasa algo al iPad.",
+        "Si todavía no guardaste ninguna, o si pasó una semana desde la última, la app te avisa en la Agenda (mientras haya datos de ejemplo no avisa).",
+        "Si un día cambiás de iPad: en el nuevo, <strong>Ajustes → Recuperar una copia</strong>.",
+      ], ["#/ajustes", "Ir a Ajustes"])}
+      ${card("probar", "sparkles", "Probar sin miedo", [
+        "En <strong>Ajustes</strong> podés cargar <strong>datos de ejemplo</strong>: alumnos, clases y pagos inventados para practicar.",
+        "Cuando termines, <strong>Borrar datos de ejemplo</strong> quita solo lo inventado. Lo que cargaste vos queda.",
+      ])}
+    </div>`;
+}
+
 document.addEventListener("click", (e) => {
   if (!e.target.closest("[data-action=clear-demo]")) return;
   act(() => reg.clearDemo(), "Borré los datos de ejemplo. Lo que cargaste vos sigue ahí.", { undo: false });
@@ -861,7 +916,7 @@ function route() {
   const params = new URLSearchParams(query);
   const parts = path.split("/").filter(Boolean);
   const section = parts[0] || "agenda";
-  $$(".tabs a").forEach((a) => { if (a.dataset.tab === section) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  $$(".tabs a, .help-link").forEach((a) => { if (a.dataset.tab === section) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   chartResize = null;
   refreshChrome();
   try {
@@ -870,6 +925,7 @@ function route() {
     else if (section === "ganancias") viewGanancias(params);
     else if (section === "proyeccion") viewProyeccion();
     else if (section === "ajustes") viewAjustes();
+    else if (section === "ayuda") viewAyuda();
     else viewAgenda(params);
   } catch (err) {
     if (!(err instanceof RegistryError)) console.error(err);
