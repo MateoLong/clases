@@ -377,6 +377,7 @@ try {
   await page.reload();
   await go("agenda");
   check("dates", "…and after reopening the agenda reads 7/10", await clase("Bruno Rodríguez", "miércoles 7/10").count() === 1);
+  check("dates", "…the week's title too", (await text("#week-h")) === "5/10 – 11/10", await text("#week-h"));
   await go(`alumnos/${martina.id}`);
   check("dates", "…the student's payments too", (await text("[data-testid=payments] li >> nth=0")).match(/^\S+ \d{1,2}\/\d{1,2}/) !== null, await text("[data-testid=payments] li >> nth=0"));
   check("dates", "a date field still holds day/month", (await page.inputValue("[data-testid=rate-from]")) === "7/10");

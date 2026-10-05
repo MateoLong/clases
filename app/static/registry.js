@@ -132,10 +132,12 @@ export class Registry {
     this.state = structuredClone(before);
     try {
       const out = fn(this.state);
+      this._memoState = null; // the new state may have been read half-changed inside fn
       this._save(this.state);
       return out;
     } catch (err) {
       this.state = before;
+      this._memoState = null;
       throw err;
     }
   }
@@ -256,7 +258,12 @@ export class Registry {
     if (archived) {
       const now = this.now();
       this._write((s) => {
-        Object.assign(s.students.find((x) => x.id === st.id), { archived: true, archived_at: `${now.date} ${now.time}` });
+        const at = `${now.date} ${now.time}`;
+        Object.assign(s.students.find((x) => x.id === st.id), { archived: true, archived_at: at });
+        // single Clases after this moment are called off, so reactivating them later can't bring them back as given
+        for (const e of s.extras) if (e.student_id === st.id && !e.cancelled && `${e.date} ${e.start}` >= at) Object.assign(e, { cancelled: true, charge: false, reason: "suspended" });
+        const mine = new Set(s.slots.filter((x) => x.student_id === st.id).map((x) => x.id));
+        for (const c of s.changes) if (c.kind === "move" && mine.has(c.slot_id) && `${c.new_date} ${c.new_start}` >= at) Object.assign(c, { kind: "cancel", charge: false, reason: "suspended" });
         for (const sl of s.slots.filter((x) => x.student_id === st.id && (!x.to || x.to >= now.date))) {
           const { oldTo } = this._cut(sl, now.date);
           if (sl.from > oldTo) s.slots = s.slots.filter((x) => x.id !== sl.id);
@@ -323,6 +330,13 @@ export class Registry {
       const who = this._requireStudent(clash.student_id).name;
       throw new RegistryError("overlap", `Ese horario se superpone con ${who} (${clash.start}).`, { slot: clash });
     }
+    // nor a single Clase (extra or moved) already booked on one of its days
+    const single = [
+      ...this.state.extras.filter((e) => !e.cancelled).map((e) => ({ date: e.date, start: e.start, minutes: e.minutes, student_id: e.student_id })),
+      ...this.state.changes.filter((c) => c.kind === "move" && c.slot_id !== ignoreId)
+        .map((c) => ({ date: c.new_date, start: c.new_start, minutes: c.new_minutes, student_id: this.state.slots.find((x) => x.id === c.slot_id)?.student_id })),
+    ].find((o) => o.student_id && o.date >= from && o.date <= (to || END) && weekday(o.date) === wd && toMinutes(o.start) < b && a < toMinutes(o.start) + o.minutes);
+    if (single) throw new RegistryError("overlap", `Ese horario se superpone con ${this._requireStudent(single.student_id).name} (${single.start}, el ${single.date.slice(8)}/${Number(single.date.slice(5, 7))}).`);
   }
 
   /** A single Clase (extra or moved) can't overlap another Clase that day; a cancelled one leaves its time free. */
@@ -366,10 +380,20 @@ export class Registry {
     this._checkOverlap({ ...next, from: newFrom }, old.id);
     const id2 = this._write((s) => {
       const o = s.slots.find((x) => x.id === old.id);
-      if (o.from >= newFrom) { Object.assign(o, next); return o.id; }
-      o.to = oldTo;
-      const nid = this._id("slot");
-      s.slots.push({ id: nid, student_id: o.student_id, ...next, from: newFrom, to: null });
+      let nid = o.id;
+      if (o.from >= newFrom) Object.assign(o, next);
+      else {
+        o.to = oldTo;
+        nid = this._id("slot");
+        s.slots.push({ id: nid, student_id: o.student_id, ...next, from: newFrom, to: null });
+      }
+      // plans and changes of the Clases from then on follow them (to that week's new weekday)
+      const shift = next.weekday - old.weekday;
+      for (const p of s.plans) {
+        const m = p.key.match(/^s(\d+)-(\d{4}-\d{2}-\d{2})$/);
+        if (m && Number(m[1]) === old.id && m[2] >= newFrom) p.key = `s${nid}-${addDays(m[2], shift)}`;
+      }
+      for (const c of s.changes) if (c.slot_id === old.id && c.date >= newFrom) Object.assign(c, { slot_id: nid, date: addDays(c.date, shift) });
       return nid;
     });
     return this.slot(id2);
@@ -403,7 +427,7 @@ export class Registry {
   cancelClass(key, { reason = null, charge = null } = {}) {
     if (reason != null && !CANCEL_REASONS.includes(reason)) throw new RegistryError("invalid", "¿Faltó o la suspendés vos?");
     reason ??= charge ? "missed" : "suspended";
-    charge = charge == null ? reason === "missed" : Boolean(charge);
+    charge = reason === "missed" || Boolean(charge); // a Faltó is always charged
     const k = this._parseKey(key);
     if (k.extra_id) {
       const ex = this.state.extras.find((e) => e.id === k.extra_id);
@@ -412,9 +436,12 @@ export class Registry {
       return;
     }
     this._requireOccurrence(k);
+    // a moved Clase stays on the day it was moved to: Faltó on Thursday is Thursday's money
+    const prev = this.state.changes.find((c) => c.slot_id === k.slot_id && c.date === k.date && c.new_date);
+    const moved = prev ? { new_date: prev.new_date, new_start: prev.new_start, new_minutes: prev.new_minutes } : {};
     this._write((s) => {
       s.changes = s.changes.filter((c) => !(c.slot_id === k.slot_id && c.date === k.date));
-      s.changes.push({ id: this._id("change"), slot_id: k.slot_id, date: k.date, kind: "cancel", charge, reason });
+      s.changes.push({ id: this._id("change"), slot_id: k.slot_id, date: k.date, kind: "cancel", charge, reason, ...moved });
     });
   }
 
@@ -422,9 +449,20 @@ export class Registry {
   restoreClass(key) {
     const k = this._parseKey(key);
     if (k.extra_id) {
+      const ex = this.state.extras.find((e) => e.id === k.extra_id);
+      if (ex?.cancelled) this._checkClassClash(ex, key);
       this._write((s) => { const ex = s.extras.find((e) => e.id === k.extra_id); if (ex) Object.assign(ex, { cancelled: false, charge: false, reason: null }); });
       return;
     }
+    const slot = this._requireOccurrence(k);
+    const ch = this.state.changes.find((c) => c.slot_id === k.slot_id && c.date === k.date);
+    if (ch?.kind === "cancel" && ch.new_date) {
+      // a moved Clase that was cancelled: undo the cancel first, it stays on the day it was moved to
+      this._checkClassClash({ date: ch.new_date, start: ch.new_start, minutes: ch.new_minutes }, key);
+      this._write((s) => { const c = s.changes.find((x) => x.id === ch.id); c.kind = "move"; delete c.charge; delete c.reason; });
+      return;
+    }
+    this._checkClassClash({ date: k.date, start: slot.start, minutes: slot.minutes }, key);
     this._write((s) => { s.changes = s.changes.filter((c) => !(c.slot_id === k.slot_id && c.date === k.date)); });
   }
 
@@ -497,6 +535,12 @@ export class Registry {
   classesBetween(from, to) {
     const now = this.now();
     const nowKey = `${now.date} ${now.time}`;
+    // Every account reads the whole history; the same state and clock always give the same
+    // Clases, so they are worked out once per state (a change always makes a new state).
+    if (this._memoState !== this.state) { this._memoState = this.state; this._memo = new Map(); }
+    const memoKey = `${from}|${to}|${nowKey}`;
+    const hit = this._memo.get(memoKey);
+    if (hit) return hit.slice();
     const out = [];
     const changes = new Map(this.state.changes.map((c) => [`${c.slot_id}-${c.date}`, c]));
     const plans = new Map(this.state.plans.map((p) => [p.key, p.text]));
@@ -517,24 +561,27 @@ export class Registry {
       for (; d <= to; d = addDays(d, 7)) {
         if (d < slot.from || (slot.to && d > slot.to)) continue;
         const ch = changes.get(`${slot.id}-${d}`);
-        if (ch?.kind === "move") continue; // shown on its new day (below)
+        if (ch?.new_date) continue; // moved (and maybe cancelled there): shown on its new day (below)
         push({ key: `s${slot.id}-${d}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: d, start: slot.start, minutes: slot.minutes,
           cancelled: ch?.kind === "cancel", charge: ch?.charge || false, reason: ch?.reason || null });
       }
     }
     for (const ch of this.state.changes) {
-      if (ch.kind !== "move" || ch.new_date < from || ch.new_date > to) continue;
+      if (!ch.new_date || ch.new_date < from || ch.new_date > to) continue;
       const slot = this.state.slots.find((s) => s.id === ch.slot_id);
       if (!slot) continue;
       push({ key: `s${slot.id}-${ch.date}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: ch.new_date, start: ch.new_start,
-        minutes: ch.new_minutes, moved_from: ch.date, rate_date: ch.date, cancelled: false, charge: false });
+        minutes: ch.new_minutes, moved_from: ch.date, rate_date: ch.date, cancelled: ch.kind === "cancel", charge: ch.charge || false, reason: ch.reason || null });
     }
     for (const ex of this.state.extras) {
       if (ex.date < from || ex.date > to) continue;
       push({ key: `e${ex.id}`, kind: "extra", extra_id: ex.id, student_id: ex.student_id, date: ex.date, start: ex.start, minutes: ex.minutes,
         cancelled: ex.cancelled, charge: ex.charge, reason: ex.reason || null });
     }
-    return out.sort((a, b) => (a.date === b.date ? toMinutes(a.start) - toMinutes(b.start) : a.date < b.date ? -1 : 1));
+    out.sort((a, b) => (a.date === b.date ? toMinutes(a.start) - toMinutes(b.start) : a.date < b.date ? -1 : 1));
+    for (const c of out) Object.freeze(c);
+    this._memo.set(memoKey, out);
+    return out.slice();
   }
 
   // ── payments & balances ──────────────────────────────────────────────
@@ -672,7 +719,7 @@ export class Registry {
     const to = addDays(weekStart(today), -1), from = addDays(weekStart(today), -7 * FLEX_WEEKS);
     const flexible = new Set();
     for (const c of this.classesBetween(from, to)) {
-      if (c.cancelled || fixed.has(c.student_id) || this._requireStudent(c.student_id).archived) continue;
+      if (c.kind !== "extra" || c.cancelled || fixed.has(c.student_id) || this._requireStudent(c.student_id).archived) continue;
       flexible.add(c.student_id);
       perWeek += this.convert(c.amount, c.currency) / FLEX_WEEKS;
       minutes += c.minutes / FLEX_WEEKS;

@@ -206,6 +206,73 @@ test("plans travel in the backup, and a backup from before plans still restores"
   assert.equal(other.classesBetween(MON, MON)[0].plan, "");
 });
 
+// ── found by the independent verifier (v2) ──
+test("changing a slot carries its future plans to the new slot (same day, or the new weekday that week)", () => {
+  const slot = r.student(martina.id).slots[0]; // Mondays 17:00
+  r.setPlan("s1-2026-10-19", "Fracciones");
+  r.setPlan("s1-2026-10-05", "Repaso"); // before the change: stays where it is
+  const n = r.changeSlot(slot.id, { start: "11:00", from: "2026-10-12" });
+  assert.equal(r.classesBetween("2026-10-19", "2026-10-19").find((c) => c.student_id === martina.id).plan, "Fracciones");
+  assert.equal(r.classesBetween(MON, MON)[0].plan, "Repaso");
+  r.changeSlot(n.id, { weekday: 4, from: "2026-10-12" }); // now Thursdays: the plan moves to that week's Thursday
+  assert.equal(r.classesBetween("2026-10-22", "2026-10-22").find((c) => c.student_id === martina.id).plan, "Fracciones");
+});
+
+test("Faltó or a suspension on a moved Clase keeps it on the day it was moved to", () => {
+  clock.date = "2026-10-08"; clock.time = "20:00";
+  const key = "s1-2026-09-28"; // Martina's Monday 28/9, moved to Thursday 8/10
+  r.moveClass(key, { date: "2026-10-08", start: "10:00" });
+  const weekOf28 = r.period("2026-09-28", "2026-10-04").earned, thisWeek = r.week().earned;
+  r.cancelClass(key, { reason: "missed" });
+  const c = r.classesBetween("2026-10-08", "2026-10-08").find((x) => x.key === key);
+  assert.deepEqual([c?.date, c?.reason, c?.billable], ["2026-10-08", "missed", true]);
+  assert.deepEqual([r.period("2026-09-28", "2026-10-04").earned, r.week().earned], [weekOf28, thisWeek]);
+  r.cancelClass(key, { reason: "suspended" });
+  assert.equal(r.classesBetween("2026-10-08", "2026-10-08").find((x) => x.key === key)?.reason, "suspended");
+  assert.equal(r.classesBetween("2026-09-28", "2026-09-28").some((x) => x.key === key), false);
+  r.restoreClass(key); // "Volver": first the cancel goes, the move stays
+  const back = r.classesBetween("2026-10-08", "2026-10-08").find((x) => x.key === key);
+  assert.deepEqual([back?.status, back?.moved_from], ["given", "2026-09-28"]);
+  assert.equal(r.period("2026-09-28", "2026-10-04").earned, weekOf28);
+});
+
+test("putting a Clase back, or a new weekly day, can't double-book either", () => {
+  const thu = "2026-10-08";
+  const ana = r.addStudent({ name: "Ana", rate: 800 });
+  const slot = r.addSlot(ana.id, { weekday: 4, start: "17:00", minutes: 60, from: "2026-09-01" });
+  r.cancelClass(`s${slot.id}-${thu}`, { reason: "suspended" });
+  r.addExtra(emma.id, { date: thu, start: "17:00", minutes: 60 });
+  rejects(() => r.restoreClass(`s${slot.id}-${thu}`), "overlap");
+  const ex = r.addExtra(martina.id, { date: "2026-10-09", start: "10:00", minutes: 60 });
+  r.cancelClass(ex, { reason: "suspended" });
+  r.addExtra(emma.id, { date: "2026-10-09", start: "10:00", minutes: 60 });
+  rejects(() => r.restoreClass(ex), "overlap");
+  // a new weekly day over a Clase extra already booked
+  r.addExtra(joaquin.id, { date: "2026-10-16", start: "15:00", minutes: 60 });
+  assert.throws(() => r.addSlot(ana.id, { weekday: 5, start: "15:30", minutes: 60, from: WED }), /Joaquín Pereira/);
+});
+
+test("archiving cancels what was booked after it, so reactivating doesn't bring it back as given", () => {
+  r.addExtra(martina.id, { date: "2026-10-14", start: "10:00", minutes: 60 });
+  r.setArchived(martina.id, true);
+  clock.date = "2026-10-21";
+  r.setArchived(martina.id, false);
+  const ex = r.classesBetween("2026-10-14", "2026-10-14").find((c) => c.student_id === martina.id);
+  assert.ok(!ex || (ex.cancelled && !ex.billable));
+  assert.equal(r.period("2026-10-12", "2026-10-18").earned, 25 * 40 + 1800); // Emma + Joaquín only
+});
+
+test("a student whose weekly day just ended isn't counted as flexible at those old hours", () => {
+  const slot = r.student(martina.id).slots[0];
+  r.endSlot(slot.id, MON); // ended this week, not archived
+  assert.equal(r.baseline().hours_per_week, 2.5); // Emma 1 h + Joaquín 1½ h
+});
+
+test("Faltó is always charged", () => {
+  r.cancelClass(week()[0].key, { reason: "missed", charge: false });
+  assert.equal(week()[0].billable, true);
+});
+
 // ── rates & slots over time ──
 test("a raise applies from its date; past classes keep the old rate", () => {
   r.setRate(martina.id, 1000, THU);

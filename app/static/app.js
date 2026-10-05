@@ -41,6 +41,14 @@ function fmtDM(iso, style = reg.state.settings.date_style) {
   if (style === "short") return `${d} ${MONTHS_SHORT[m - 1]}${other ? ` ${y}` : ""}`;
   return `${d} de ${MONTHS[m - 1]}${other ? ` de ${y}` : ""}`;
 }
+/** A week's title in her date style: "5 – 11 de octubre", "5 – 11 oct" or "5/10 – 11/10" (with the year when it isn't this one). */
+function weekRange(from, to) {
+  const style = reg.state.settings.date_style;
+  const y = to.slice(0, 4) !== reg.today().slice(0, 4) ? to.slice(0, 4) : "";
+  if (style === "numeric" || monNum(from) !== monNum(to)) return `${fmtDM(from)} – ${fmtDM(to)}`;
+  if (style === "short") return `${dayNum(from)} – ${dayNum(to)} ${MONTHS_SHORT[monNum(to) - 1]}${y ? ` ${y}` : ""}`;
+  return `${dayNum(from)} – ${dayNum(to)} de ${MONTHS[monNum(to) - 1]}${y ? ` de ${y}` : ""}`;
+}
 /** A date inside a form: always typed as day/month, whatever the display style. */
 const fmtTyped = (iso) => `${dayNum(iso)}/${monNum(iso)}${iso.slice(0, 4) !== reg.today().slice(0, 4) ? `/${iso.slice(0, 4)}` : ""}`;
 const fmtDayLong = (iso) => `${DAYS[weekday(iso) - 1]} ${fmtDM(iso)}`;
@@ -190,7 +198,7 @@ function viewAgenda(params) {
   const thisWeek = from === weekStart(today);
   const past = to < today;
   const sel = classes.find((c) => c.key === selected) || null;
-  const range = monNum(from) === monNum(to) ? `${dayNum(from)} – ${dayNum(to)} de ${MONTHS[monNum(to) - 1]}` : `${dayNum(from)} de ${MONTHS[monNum(from) - 1]} – ${dayNum(to)} de ${MONTHS[monNum(to) - 1]}`;
+  const range = weekRange(from, to);
   const students = reg.students();
   const empty = !reg.state.students.length;
 
@@ -281,7 +289,7 @@ function selectedPanel(c) {
       ${c.status !== "cancelled" ? `<button type="button" class="btn btn-line btn-sm" data-act="missed" data-testid="cancel-missed">${icon("user-x")}Faltó <span class="btn-note">se cobra</span></button>
         <button type="button" class="btn btn-line btn-sm" data-act="suspend" data-testid="cancel-suspend">${icon("calendar-x")}La suspendo yo <span class="btn-note">no se cobra</span></button>` : ""}
       ${c.status === "cancelled" && !c.charge ? `<button type="button" class="btn btn-line btn-sm" data-act="charge-anyway">Cobrarla igual</button>` : ""}
-      ${canRestore ? `<button type="button" class="btn btn-line btn-sm" data-act="restore" data-testid="restore-class">${icon("undo-2")}Volver a su día y hora</button>` : ""}
+      ${canRestore ? `<button type="button" class="btn btn-line btn-sm" data-act="restore" data-testid="restore-class">${icon("undo-2")}${c.status === "cancelled" && c.moved_from ? "Volver a agendarla (ese día)" : "Volver a su día y hora"}</button>` : ""}
       <button type="button" class="btn btn-quiet btn-sm" data-act="move-open" data-testid="move-open">${icon("calendar-clock")}Mover</button>
     </div>
     <form class="move-form" hidden novalidate data-testid="move-form">
