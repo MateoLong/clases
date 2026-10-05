@@ -190,6 +190,16 @@
 .tip strong { font-size: 1.0625rem; }
 .tip-row { display: flex; align-items: center; gap: 8px; color: #dfe4f3; }
 .tip-row i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+/* "Datos del colegio": folded away in the new-student form, same chevron as the table view. */
+.form-more summary { cursor: pointer; font-family: var(--font-ui); font-weight: 700; color: var(--moña); list-style: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.form-more summary::-webkit-details-marker { display: none; }
+.form-more summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; rotate: -45deg; transition: rotate .18s var(--ease-out); }
+.form-more[open] summary::before { rotate: 45deg; }
+.form-more .grid-school { margin-top: 8px; }
+.grid-school { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 14px; }
+.school-line { margin: 6px 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.school-line a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 700; }
+.school-line svg { width: 18px; height: 18px; }
 .table-view summary { cursor: pointer; font-weight: 700; color: var(--moña); list-style: none; display: inline-flex; align-items: center; gap: 6px; }
 .table-view summary::-webkit-details-marker { display: none; }
 .table-view summary::before {

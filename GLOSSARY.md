@@ -8,6 +8,10 @@ The private classes one tutor gives: who comes when, what each one pays, what sh
 Someone she gives classes to, with a Tarifa in one currency (UYU or USD) and a colour of their own.
 _Avoid_: cliente, estudiante
 
+**Colegio**, **Año**, **Maestra/o**:
+Where an Alumno goes to school, the school year they are in (1º to 6º) and their teacher there, with a mail to reach them. All optional.
+_Avoid_: clase or grado (for the Año: a Clase is a sitting), profesor (for the Maestra/o: she is the tutor)
+
 **Tarifa**:
 What an Alumno pays per hour, in force from a date on. A new Tarifa never changes Clases before its date.
 _Avoid_: precio, valor hora

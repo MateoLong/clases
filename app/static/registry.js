@@ -84,6 +84,24 @@ function validCurrency(c) {
   if (!CURRENCIES.includes(c)) throw new RegistryError("invalid", "La moneda tiene que ser UYU o USD.");
   return c;
 }
+/** School details are optional: Año is 1º to 6º, the maestra/o's mail only needs to look like one. */
+function schoolFields({ school, grade, teacher, teacher_email } = {}) {
+  const out = {};
+  if (school !== undefined) out.school = String(school ?? "").trim();
+  if (teacher !== undefined) out.teacher = String(teacher ?? "").trim();
+  if (grade !== undefined) {
+    const g = grade === null || String(grade).trim() === "" ? null : Number(grade);
+    if (g !== null && !(Number.isInteger(g) && g >= 1 && g <= 6)) throw new RegistryError("invalid", "El año tiene que ser de 1º a 6º.");
+    out.grade = g;
+  }
+  if (teacher_email !== undefined) {
+    const e = String(teacher_email ?? "").trim();
+    if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new RegistryError("invalid", "Ese mail no parece bien escrito. Revisalo (por ejemplo, maestra@escuela.edu.uy).");
+    out.teacher_email = e;
+  }
+  return out;
+}
+const NO_SCHOOL = { school: "", grade: null, teacher: "", teacher_email: "" };
 const nowStamp = () => new Date().toISOString().slice(0, 19);
 const norm = (t) => String(t || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -169,15 +187,16 @@ export class Registry {
   }
 
   // ── students & rates ─────────────────────────────────────────────────
-  addStudent({ name, rate, currency = "UYU", notes = "", from = null, demo = false } = {}) {
+  addStudent({ name, rate, currency = "UYU", notes = "", from = null, demo = false, ...more } = {}) {
     name = String(name || "").trim();
     if (!name) throw new RegistryError("invalid", "Falta el nombre.");
     const amount = validAmount(rate, "La tarifa por hora");
     currency = validCurrency(currency);
+    const school = { ...NO_SCHOOL, ...schoolFields(more) };
     const since = from ? validDate(from) : "2000-01-01";
     const id = this._write((s) => {
       const sid = this._id("student");
-      s.students.push({ id: sid, name, currency, ink: nextInk(s.students), notes: String(notes || "").trim(), archived: false, is_demo: demo, created_at: nowStamp() });
+      s.students.push({ id: sid, name, currency, ink: nextInk(s.students), notes: String(notes || "").trim(), ...school, archived: false, is_demo: demo, created_at: nowStamp() });
       s.rates.push({ id: this._id("rate"), student_id: sid, amount, from: since });
       return sid;
     });
@@ -190,9 +209,9 @@ export class Registry {
     return st;
   }
 
-  updateStudent(id, { name, notes, currency } = {}) {
+  updateStudent(id, { name, notes, currency, ...more } = {}) {
     const st = this._requireStudent(id);
-    const ch = {};
+    const ch = schoolFields(more);
     if (name != null) { if (!String(name).trim()) throw new RegistryError("invalid", "Falta el nombre."); ch.name = String(name).trim(); }
     if (notes != null) ch.notes = String(notes).trim();
     if (currency != null && currency !== st.currency) {
@@ -623,8 +642,10 @@ export class Registry {
         rows: this.payments().map((p) => [p.date, p.student, p.amount, p.currency, p.note]) };
     }
     if (kind === "students") {
-      return { name: "Alumnos", columns: [["Nombre", 26], ["Tarifa por hora", 15], ["Moneda", 8], ["Horas por semana", 16], ["Debe", 11], [`Debe (${cur})`, 13]],
-        rows: this.students(true).map((s) => [s.name, s.rate, s.currency, round2(s.weekly_minutes / 60), s.owes, round2(this.convert(s.owes, s.currency))]) };
+      return { name: "Alumnos", columns: [["Nombre", 26], ["Tarifa por hora", 15], ["Moneda", 8], ["Horas por semana", 16], ["Debe", 11], [`Debe (${cur})`, 13],
+        ["Colegio", 24], ["Año", 6], ["Maestra/o", 22], ["Mail de la maestra/o", 28]],
+        rows: this.students(true).map((s) => [s.name, s.rate, s.currency, round2(s.weekly_minutes / 60), s.owes, round2(this.convert(s.owes, s.currency)),
+          s.school, s.grade ? `${s.grade}º` : "", s.teacher, s.teacher_email]) };
     }
     throw new RegistryError("invalid", "Tipo de planilla desconocido.");
   }
@@ -698,6 +719,6 @@ function migrate(state) {
   const out = { ...base, ...state, seq: { ...base.seq, ...(state.seq || {}) }, settings: { ...base.settings, ...(state.settings || {}) } };
   // students saved before colours were stored get one now, in the order they were added
   const done = [];
-  out.students = (out.students || []).map((st) => { const s2 = st.ink ? st : { ...st, ink: nextInk(done) }; done.push(s2); return s2; });
+  out.students = (out.students || []).map((st) => { const s2 = { ...NO_SCHOOL, ...(st.ink ? st : { ...st, ink: nextInk(done) }) }; done.push(s2); return s2; });
   return out;
 }

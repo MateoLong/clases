@@ -103,6 +103,30 @@ test("a 50-minute class is charged 50/60 of the hourly rate", () => {
   assert.equal(r.classesBetween(THU, THU).find((x) => x.key === k2).amount, 666.67); // rounded to cents
 });
 
+test("school details: optional, checked, editable, exported", () => {
+  const ana = r.addStudent({ name: "Ana", rate: 800, school: " Escuela 12 ", grade: "4", teacher: "Maestra Uno", teacher_email: "uno@escuela.edu.uy" });
+  assert.deepEqual([ana.school, ana.grade, ana.teacher, ana.teacher_email], ["Escuela 12", 4, "Maestra Uno", "uno@escuela.edu.uy"]);
+  assert.deepEqual([martina.school, martina.grade, martina.teacher, martina.teacher_email], ["", null, "", ""]);
+  const before = JSON.stringify(r.state);
+  rejects(() => r.addStudent({ name: "X", rate: 800, grade: 7 }), "invalid");
+  rejects(() => r.addStudent({ name: "X", rate: 800, grade: "0" }), "invalid");
+  rejects(() => r.updateStudent(ana.id, { teacher_email: "uno@escuela" }), "invalid");
+  rejects(() => r.updateStudent(ana.id, { teacher_email: "uno escuela.edu.uy" }), "invalid");
+  assert.equal(JSON.stringify(r.state), before);
+  const upd = r.updateStudent(ana.id, { grade: "", teacher_email: "", school: "Colegio Dos" });
+  assert.deepEqual([upd.school, upd.grade, upd.teacher, upd.teacher_email], ["Colegio Dos", null, "Maestra Uno", ""]);
+  assert.equal(r.updateStudent(ana.id, { name: "Ana B" }).school, "Colegio Dos"); // other edits leave them alone
+  const t = r.exportTable("students");
+  const row = t.rows.find((x) => x[0] === "Ana B");
+  assert.deepEqual(t.columns.slice(-4).map((c) => c[0]), ["Colegio", "Año", "Maestra/o", "Mail de la maestra/o"]);
+  assert.deepEqual(row.slice(-4), ["Colegio Dos", "", "Maestra Uno", ""]);
+  // a student saved before these fields existed
+  const old = structuredClone(r.state);
+  for (const st of old.students) { delete st.school; delete st.grade; delete st.teacher; delete st.teacher_email; }
+  const r2 = new Registry(old, { now: () => clock });
+  assert.deepEqual([r2.student(martina.id).school, r2.student(martina.id).grade], ["", null]);
+});
+
 // ── rates & slots over time ──
 test("a raise applies from its date; past classes keep the old rate", () => {
   r.setRate(martina.id, 1000, THU);

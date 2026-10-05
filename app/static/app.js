@@ -398,6 +398,17 @@ function backupNudge() {
 }
 
 // ══ ALUMNOS ════════════════════════════════════════════════════════════
+const gradeText = (g) => (g ? `${g}º año` : "");
+const gradeSelect = (value = null, testid = "") =>
+  `<select class="input" name="grade" ${testid ? `data-testid="${testid}"` : ""}><option value="">—</option>${[1, 2, 3, 4, 5, 6].map((g) => `<option value="${g}" ${g === value ? "selected" : ""}>${g}º</option>`).join("")}</select>`;
+/** Colegio, Año, Maestra/o and mail, as form fields (new student and edit). */
+const schoolInputs = (s = {}, prefix = "") => `<div class="grid-school">
+    <label class="field"><span>Colegio</span><input class="input" name="school" value="${esc(s.school)}" ${prefix ? `data-testid="${prefix}-school"` : ""}></label>
+    <label class="field"><span>Año</span>${gradeSelect(s.grade ?? null, prefix ? `${prefix}-grade` : "")}</label>
+    <label class="field"><span>Maestra/o</span><input class="input" name="teacher" value="${esc(s.teacher)}" ${prefix ? `data-testid="${prefix}-teacher"` : ""}></label>
+    <label class="field"><span>Mail de la maestra/o</span><input class="input" type="email" name="teacher_email" value="${esc(s.teacher_email)}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="maestra@escuela.edu.uy" ${prefix ? `data-testid="${prefix}-email"` : ""}></label>
+  </div>`;
+const schoolValues = (f) => ({ school: f.school.value, grade: f.grade.value, teacher: f.teacher.value, teacher_email: f.teacher_email.value });
 const slotDates = (s) => {
   const today = reg.today();
   return `${s.from > today ? ` desde el ${fmtDM(s.from)}` : ""}${s.to ? ` hasta el ${fmtDM(s.to)}` : ""}`;
@@ -420,6 +431,7 @@ function viewAlumnos(params) {
           <label><input type="radio" name="currency" value="UYU" checked><span>$ UYU</span></label>
           <label><input type="radio" name="currency" value="USD"><span>US$ USD</span></label></div></fieldset>
       </div>
+      <details class="form-more" data-testid="new-school-toggle"><summary>Datos del colegio <span class="muted">(opcional)</span></summary>${schoolInputs({}, "new")}</details>
       <p class="form-sub">Su clase de todas las semanas <span class="muted">(después podés agregar más días)</span></p>
       <div class="grid-slot">
         <label class="field"><span>Día</span><select class="input" name="weekday" data-testid="new-weekday"><option value="">Sin día fijo</option>${DAYS.map((d, i) => `<option value="${i + 1}">${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select></label>
@@ -433,7 +445,7 @@ function viewAlumnos(params) {
         <a href="#/alumnos/${s.id}" class="student-row">
           ${avatar(s, 44)}
           <span class="student-main"><strong>${esc(s.name)}</strong>${s.archived ? ' <span class="pill pill-off">Archivado</span>' : ""}
-            <span class="muted">${s.slots.length ? s.slots.map(slotText).join(" · ") : "Sin día fijo"}</span></span>
+            <span class="muted">${s.grade ? `${s.grade}º · ` : ""}${s.slots.length ? s.slots.map(slotText).join(" · ") : "Sin día fijo"}</span></span>
           <span class="student-rate">${moneyIn(s.rate, s.currency)}<small>por hora</small></span>
           <span class="student-owes">${s.owes > 0.004 ? `<span class="pill pill-late">Debe ${moneyIn(s.owes, s.currency)}</span>` : `<span class="pill pill-ok">Al día</span>`}</span>
         </a></li>`).join("")}</ul>`
@@ -450,7 +462,7 @@ function viewAlumnos(params) {
     e.preventDefault();
     const f = form;
     const s = actInForm(f, () => {
-      const st = reg.addStudent({ name: f.name.value, rate: f.rate.value, currency: f.currency.value, from: "2000-01-01" });
+      const st = reg.addStudent({ name: f.name.value, rate: f.rate.value, currency: f.currency.value, from: "2000-01-01", ...schoolValues(f) });
       if (f.weekday.value) reg.addSlot(st.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value });
       return st;
     }, (st) => `Agregado: ${st.name}.`);
@@ -470,7 +482,8 @@ function viewAlumno(id) {
     <div class="detail-head">
       ${avatar(s, 84)}
       <div><h1>${esc(s.name)}</h1>
-        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> por hora</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div></div>
+        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> por hora</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
+        ${s.school || s.grade || s.teacher || s.teacher_email ? `<p class="school-line" data-testid="school-line">${[s.school && esc(s.school), gradeText(s.grade)].filter(Boolean).join(" · ")}${s.teacher || s.teacher_email ? `${s.school || s.grade ? "<br>" : ""}Maestra/o: ${esc(s.teacher || "")}${s.teacher_email ? ` <a href="mailto:${esc(s.teacher_email)}" data-testid="teacher-mail">${icon("mail")}${esc(s.teacher_email)}</a>` : ""}` : ""}</p>` : ""}</div>
       <div class="btn-col">
         <button type="button" class="btn btn-quiet ${s.archived ? "" : "btn-danger"}" data-act="archive">${icon("archive")}${s.archived ? "Reactivar" : "Archivar"}</button>
       </div>
@@ -537,7 +550,8 @@ function viewAlumno(id) {
         <form id="edit-form" class="inline-form" novalidate>
           <h3 class="sub-h">Datos</h3>
           <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(s.name)}"></label>
-          <label class="field"><span>Notas</span><textarea class="input paste" name="notes" rows="2" placeholder="Materia, colegio, teléfono de la mamá…">${esc(s.notes)}</textarea></label>
+          ${schoolInputs(s, "edit")}
+          <label class="field"><span>Notas</span><textarea class="input paste" name="notes" rows="2" placeholder="Materia, teléfono de la mamá…">${esc(s.notes)}</textarea></label>
           <div class="form-msg"></div>
           <button class="btn btn-line btn-sm" type="submit">Guardar</button>
         </form>
@@ -582,7 +596,7 @@ function viewAlumno(id) {
   });
   $("#edit-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    actInForm(e.target, () => reg.updateStudent(s.id, { name: e.target.name.value, notes: e.target.notes.value }), "Guardado.");
+    actInForm(e.target, () => reg.updateStudent(s.id, { name: e.target.name.value, notes: e.target.notes.value, ...schoolValues(e.target) }), "Guardado.");
   });
 }
 
@@ -906,6 +920,7 @@ function viewAyuda() {
       ])}
       ${card("alumnos", "user-plus", "Alumnos y tarifas", [
         "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por hora (en pesos o dólares) y su día y hora de clase.",
+        "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Tocando el mail se abre Mail para escribirle.",
         "En su ficha podés agregar otro día, cambiarlo o quitarlo.",
         "Para subirle la tarifa, usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",
         "Si deja de venir, <strong>Archivar</strong> quita sus clases que vienen. Lo que te debe y su historial quedan.",
