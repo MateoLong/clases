@@ -4,6 +4,8 @@
 
 export const DEFAULT_SETTINGS = { currency: "UYU", usd_rate: 40, title: "Mis clases", date_style: "long" };
 export const CURRENCIES = ["UYU", "USD"];
+/** Why a Clase didn't happen: the student missed it (Faltó, charged) or she suspended it. */
+export const CANCEL_REASONS = ["missed", "suspended"];
 /** How dates are shown: "7 de octubre", "7 oct" or "7/10". */
 export const DATE_STYLES = ["long", "short", "numeric"];
 /** The eight forro colours; each student gets one for good (least used first). */
@@ -383,18 +385,26 @@ export class Registry {
     throw new RegistryError("not_found", "No encontré esa clase.");
   }
 
-  cancelClass(key, { charge = false } = {}) {
+  /**
+   * A Clase that won't happen. reason "missed" (Faltó: the student didn't come) is charged;
+   * "suspended" (she called it off) is not, unless she says to charge it anyway. The charge
+   * flag is what money follows; the reason is what she sees.
+   */
+  cancelClass(key, { reason = null, charge = null } = {}) {
+    if (reason != null && !CANCEL_REASONS.includes(reason)) throw new RegistryError("invalid", "¿Faltó o la suspendés vos?");
+    reason ??= charge ? "missed" : "suspended";
+    charge = charge == null ? reason === "missed" : Boolean(charge);
     const k = this._parseKey(key);
     if (k.extra_id) {
       const ex = this.state.extras.find((e) => e.id === k.extra_id);
       if (!ex) throw new RegistryError("not_found", "No encontré esa clase.");
-      this._write((s) => Object.assign(s.extras.find((e) => e.id === ex.id), { cancelled: true, charge: Boolean(charge) }));
+      this._write((s) => Object.assign(s.extras.find((e) => e.id === ex.id), { cancelled: true, charge, reason }));
       return;
     }
     this._requireOccurrence(k);
     this._write((s) => {
       s.changes = s.changes.filter((c) => !(c.slot_id === k.slot_id && c.date === k.date));
-      s.changes.push({ id: this._id("change"), slot_id: k.slot_id, date: k.date, kind: "cancel", charge: Boolean(charge) });
+      s.changes.push({ id: this._id("change"), slot_id: k.slot_id, date: k.date, kind: "cancel", charge, reason });
     });
   }
 
@@ -402,7 +412,7 @@ export class Registry {
   restoreClass(key) {
     const k = this._parseKey(key);
     if (k.extra_id) {
-      this._write((s) => { const ex = s.extras.find((e) => e.id === k.extra_id); if (ex) Object.assign(ex, { cancelled: false, charge: false }); });
+      this._write((s) => { const ex = s.extras.find((e) => e.id === k.extra_id); if (ex) Object.assign(ex, { cancelled: false, charge: false, reason: null }); });
       return;
     }
     this._write((s) => { s.changes = s.changes.filter((c) => !(c.slot_id === k.slot_id && c.date === k.date)); });
@@ -485,7 +495,9 @@ export class Registry {
       const status = o.cancelled ? "cancelled" : done ? "given" : "scheduled";
       const st = this.state.students.find((x) => x.id === o.student_id);
       const amount = round2((o.minutes / 60) * this.rateOn(o.student_id, o.rate_date || o.date));
-      out.push({ ...o, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "" });
+      // cancels saved before reasons existed: a charged one was a Faltó, an uncharged one a suspension
+      const reason = o.cancelled ? o.reason || (o.charge ? "missed" : "suspended") : null;
+      out.push({ ...o, reason, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "" });
     };
     for (const slot of this.state.slots) {
       let d = addDays(from, (slot.weekday - weekday(from) + 7) % 7);
@@ -494,7 +506,7 @@ export class Registry {
         const ch = changes.get(`${slot.id}-${d}`);
         if (ch?.kind === "move") continue; // shown on its new day (below)
         push({ key: `s${slot.id}-${d}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: d, start: slot.start, minutes: slot.minutes,
-          cancelled: ch?.kind === "cancel", charge: ch?.charge || false });
+          cancelled: ch?.kind === "cancel", charge: ch?.charge || false, reason: ch?.reason || null });
       }
     }
     for (const ch of this.state.changes) {
@@ -507,7 +519,7 @@ export class Registry {
     for (const ex of this.state.extras) {
       if (ex.date < from || ex.date > to) continue;
       push({ key: `e${ex.id}`, kind: "extra", extra_id: ex.id, student_id: ex.student_id, date: ex.date, start: ex.start, minutes: ex.minutes,
-        cancelled: ex.cancelled, charge: ex.charge });
+        cancelled: ex.cancelled, charge: ex.charge, reason: ex.reason || null });
     }
     return out.sort((a, b) => (a.date === b.date ? toMinutes(a.start) - toMinutes(b.start) : a.date < b.date ? -1 : 1));
   }
@@ -653,7 +665,7 @@ export class Registry {
       return {
         name: "Clases",
         columns: [["Fecha", 12, "date"], ["Hora", 8], ["Alumno", 26], ["Minutos", 9], ["Estado", 12], ["Monto", 11], ["Moneda", 8]],
-        rows: cs.map((c) => [c.date, c.start, c.student, c.minutes, c.cancelled ? (c.charge ? "Cancelada (se cobra)" : "Cancelada") : c.past ? "Dada" : "Agendada",
+        rows: cs.map((c) => [c.date, c.start, c.student, c.minutes, c.cancelled ? (c.reason === "missed" ? "Faltó (se cobra)" : c.charge ? "Suspendida (se cobra)" : "Suspendida") : c.past ? "Dada" : "Agendada",
           c.billable ? c.amount : 0, c.currency]),
       };
     }
@@ -701,8 +713,8 @@ export class Registry {
     // a cancellation, a charged cancellation, a moved class and an extra class, all recent
     const lastWeek = addDays(weekStart(today), -7);
     const cs = this.classesBetween(lastWeek, addDays(lastWeek, 6));
-    if (cs[0]) this.cancelClass(cs[0].key, { charge: false });
-    if (cs[2]) this.cancelClass(cs[2].key, { charge: true });
+    if (cs[0]) this.cancelClass(cs[0].key, { reason: "suspended" });
+    if (cs[2]) this.cancelClass(cs[2].key, { reason: "missed" });
     if (cs[3]) this.moveClass(cs[3].key, { date: addDays(cs[3].date, 1), start: "19:00" });
     this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "10:00", minutes: 90 });
     // payments: each month paid in its first days; two students have not paid last month yet

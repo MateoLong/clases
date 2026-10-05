@@ -250,14 +250,17 @@ function viewAgenda(params) {
   wireFirstRun();
 }
 
+/** How a cancelled Clase reads: "faltó", "suspendida" or "suspendida · se cobra". */
+const cancelText = (c) => (c.reason === "missed" ? "faltó" : c.charge ? "suspendida · se cobra" : "suspendida");
+
 function classLabel(c) {
   const state = c.status === "cancelled"
-    ? (c.charge ? `<span class="state">${icon("calendar-x")}cancelada · se cobra</span>` : `<span class="state">${icon("calendar-x")}cancelada</span>`)
+    ? `<span class="state">${icon(c.reason === "missed" ? "user-x" : "calendar-x")}${cancelText(c)}</span>`
     : c.status === "given" ? `<span class="state">${icon("check")}dada</span>`
     : c.moved_from ? `<span class="state">${icon("calendar-clock")}movida</span>`
     : c.kind === "extra" ? `<span class="state">${icon("plus")}extra</span>` : "";
-  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? "cancelada" : "agendada"}${c.plan ? ", con planificación" : ""}`;
-  return `<button type="button" class="clase is-${c.status} ${c.charge ? "is-charged" : ""}" style="--c:${ink(c.student_id)}" data-key="${c.key}" aria-pressed="${c.key === selected}" aria-label="${esc(label)}" data-testid="clase">
+  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? cancelText(c) : "agendada"}${c.plan ? ", con planificación" : ""}`;
+  return `<button type="button" class="clase is-${c.status} ${c.charge ? "is-charged" : ""} ${c.reason === "missed" ? "is-missed" : ""}" style="--c:${ink(c.student_id)}" data-key="${c.key}" aria-pressed="${c.key === selected}" aria-label="${esc(label)}" data-testid="clase">
     <span class="clase-top"><span class="clase-time">${c.start}</span>${c.plan ? `<span class="plan-mark" data-testid="plan-mark">${icon("pencil")}</span>` : ""}<span class="clase-dur">${fmtDuration(c.minutes)}</span></span>
     <span class="clase-name hand">${esc(c.student)}</span>
     <span class="clase-foot"><span class="amount">${c.status === "cancelled" && !c.charge ? "—" : shown(c.amount, c.currency)}</span>${state}</span>
@@ -270,12 +273,12 @@ function selectedPanel(c) {
   return `<section class="panel rail-selected" style="--c:${ink(c.student_id)}" data-testid="selected-class" aria-label="Clase elegida">
     <div class="selected-head">${avatar({ id: c.student_id, name: c.student }, 40)}<div><h2>${esc(c.student)}</h2>
       <p class="muted">${fmtDayLong(c.date)} · ${c.start} a ${end}</p></div></div>
-    <p class="selected-money">${c.status === "cancelled" ? (c.charge ? `Cancelada, <strong>se cobra ${shown(c.amount, c.currency)}</strong>` : "Cancelada, no se cobra") : `${c.status === "given" ? "Dada" : "Agendada"} · <strong>${shown(c.amount, c.currency)}</strong>`}
+    <p class="selected-money">${c.status === "cancelled" ? (c.charge ? `${c.reason === "missed" ? "Faltó" : "Suspendida"}, <strong>se cobra ${shown(c.amount, c.currency)}</strong>` : "Suspendida, no se cobra") : `${c.status === "given" ? "Dada" : "Agendada"} · <strong>${shown(c.amount, c.currency)}</strong>`}
       ${c.moved_from ? `<br><span class="muted">Movida desde el ${fmtDayLong(c.moved_from)}</span>` : ""}</p>
     <div class="btn-col">
-      ${c.status !== "cancelled" ? `<button type="button" class="btn btn-line btn-sm" data-act="cancel" data-testid="cancel-class">${icon("calendar-x")}Cancelar</button>
-        <button type="button" class="btn btn-line btn-sm" data-act="cancel-charge" data-testid="cancel-charge">Cancelar y cobrar igual</button>` : ""}
-      ${c.status === "cancelled" && !c.charge ? `<button type="button" class="btn btn-line btn-sm" data-act="cancel-charge">Cobrarla igual</button>` : ""}
+      ${c.status !== "cancelled" ? `<button type="button" class="btn btn-line btn-sm" data-act="missed" data-testid="cancel-missed">${icon("user-x")}Faltó <span class="btn-note">se cobra</span></button>
+        <button type="button" class="btn btn-line btn-sm" data-act="suspend" data-testid="cancel-suspend">${icon("calendar-x")}La suspendo yo <span class="btn-note">no se cobra</span></button>` : ""}
+      ${c.status === "cancelled" && !c.charge ? `<button type="button" class="btn btn-line btn-sm" data-act="charge-anyway">Cobrarla igual</button>` : ""}
       ${canRestore ? `<button type="button" class="btn btn-line btn-sm" data-act="restore" data-testid="restore-class">${icon("undo-2")}Volver a su día y hora</button>` : ""}
       <button type="button" class="btn btn-quiet btn-sm" data-act="move-open" data-testid="move-open">${icon("calendar-clock")}Mover</button>
     </div>
@@ -301,8 +304,9 @@ function wireSelected(c, params) {
   if (!c) return;
   const panel = $("[data-testid=selected-class]");
   const when = `${c.student.split(" ")[0]}, ${fmtDayShort(c.date)}`;
-  $("[data-act=cancel]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key), `Cancelada: ${when}.`));
-  $$("[data-act=cancel-charge]", panel).forEach((b) => b.addEventListener("click", () => act(() => reg.cancelClass(c.key, { charge: true }), `Cancelada, se cobra igual: ${when}.`)));
+  $("[data-act=missed]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key, { reason: "missed" }), `Faltó: ${when}. Se cobra igual.`));
+  $("[data-act=suspend]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key, { reason: "suspended" }), `Suspendida: ${when}. No se cobra.`));
+  $("[data-act=charge-anyway]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key, { reason: c.reason, charge: true }), `Suspendida, se cobra igual: ${when}.`));
   $("[data-act=restore]", panel)?.addEventListener("click", () => act(() => reg.restoreClass(c.key), `La clase volvió a su día: ${when}.`));
   const plan = $(".plan-form", panel);
   plan.addEventListener("submit", (e) => {
@@ -573,9 +577,9 @@ function viewAlumno(id) {
 
       <section class="panel" data-testid="student-classes">
         <h2>Próximas clases</h2>
-        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? "cancelada" : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
+        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? cancelText(c) : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
         <h3 class="sub-h">Últimas clases</h3>
-        ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `cancelada · ${moneyIn(c.amount, c.currency)}` : "cancelada") : moneyIn(c.amount, c.currency)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
+        ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `${c.reason === "missed" ? "faltó" : "suspendida"} · ${moneyIn(c.amount, c.currency)}` : "suspendida") : moneyIn(c.amount, c.currency)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
       </section>
     </div>`;
 
@@ -707,7 +711,7 @@ function viewGanancias(params) {
   const maxS = Math.max(...byStudent.map((s) => s.amount), 1);
 
   main.innerHTML = `
-    <div class="page-head"><div><h1>Ganancias</h1><p>Todo en ${cur() === "USD" ? `dólares (1 US$ = ${moneyIn(reg.state.settings.usd_rate, "UYU")})` : "pesos"}. Una clase cuenta como ganada cuando ya pasó; las canceladas solo si se cobran.</p></div></div>
+    <div class="page-head"><div><h1>Ganancias</h1><p>Todo en ${cur() === "USD" ? `dólares (1 US$ = ${moneyIn(reg.state.settings.usd_rate, "UYU")})` : "pesos"}. Una clase cuenta como ganada cuando ya pasó. Si el alumno faltó, cuenta igual; si la suspendiste vos, no.</p></div></div>
     <section class="panel month-lead" data-testid="money-tiles">
       <p class="muted">En ${MONTHS[Number(today.slice(5, 7)) - 1]} llevás ganados</p>
       <p class="hero-figure" data-testid="month-total">${money(thisMonth.earned)}</p>
@@ -919,8 +923,9 @@ function viewAyuda() {
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("cambiar", "calendar-x", "Cancelar, mover o preparar una clase", [
         "En la <strong>Agenda</strong>, tocá la clase.",
-        "Elegí <strong>Cancelar</strong> (no se cobra) o <strong>Cancelar y cobrar igual</strong>. Para cambiarla de día: <strong>Mover</strong>, escribí el día y la hora nuevos y tocá <strong>Mover la clase</strong>.",
-        "Si la cancelaste o la moviste y querés dejarla como era, tocala y elegí <strong>Volver a su día y hora</strong>. (Una clase extra que moviste no tiene ese botón: movela de nuevo.)",
+        "Si el alumno no viene, tocá <strong>Faltó</strong>: la clase se cobra igual. Si la suspendés vos, tocá <strong>La suspendo yo</strong>: no se cobra (y si después querés cobrarla, <strong>Cobrarla igual</strong>).",
+        "Para cambiarla de día: <strong>Mover</strong>, escribí el día y la hora nuevos y tocá <strong>Mover la clase</strong>.",
+        "Si marcaste que faltó, la suspendiste o la moviste y querés dejarla como era, tocala y elegí <strong>Volver a su día y hora</strong>. (Una clase extra que moviste no tiene ese botón: movela de nuevo.)",
         "Para preparar una clase, tocala y escribí en <strong>Planificación</strong> qué van a trabajar; tocá <strong>Guardar planificación</strong>. La etiqueta queda con un lápiz, y la planificación se ve también en la ficha del alumno.",
         "¿Te equivocaste? Tocá <strong>Deshacer</strong> en el aviso que aparece abajo.",
       ], ["#/agenda", "Ir a la Agenda"])}
@@ -941,7 +946,7 @@ function viewAyuda() {
         "Si deja de venir, <strong>Archivar</strong> quita sus clases que vienen. Lo que te debe y su historial quedan.",
       ], ["#/alumnos", "Ir a Alumnos"])}
       ${card("ganancias", "chart-column", "Ganancias, ¿Y si…? y dólares", [
-        "<strong>Ganancias</strong> muestra lo ganado y lo agendado por mes o por semana. Una clase cancelada solo cuenta si la cobrás igual.",
+        "<strong>Ganancias</strong> muestra lo ganado y lo agendado por mes o por semana. Una clase en la que el alumno faltó cuenta; una que suspendiste vos, no (salvo que la cobres igual).",
         "<strong>¿Y si…?</strong> sirve para jugar: elegí cuántos alumnos nuevos, cuántas clases y a qué tarifa, y mirá cuánto cambia tu mes.",
         "Arriba a la derecha, <strong>UYU / USD</strong> pasa todo a pesos o a dólares, con la cotización que pusiste en Ajustes.",
         "En <strong>Ajustes → Fechas</strong> elegís cómo se ven las fechas: 7 de octubre, 7 oct o 7/10. Para escribirlas, siempre día/mes.",

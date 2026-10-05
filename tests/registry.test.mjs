@@ -72,6 +72,36 @@ test("cancel, charge anyway, restore", () => {
   assert.equal(week()[0].status, "given");
 });
 
+test("Faltó is charged, La suspendo yo is not, and either can be put back", () => {
+  const [mon, , wed] = week();
+  r.cancelClass(wed.key, { reason: "missed" }); // Joaquín won't come today
+  const j = week().find((c) => c.key === wed.key);
+  assert.deepEqual([j.status, j.reason, j.billable], ["cancelled", "missed", true]);
+  assert.equal(r.week().total, 3600); // still counts
+  r.cancelClass(mon.key, { reason: "suspended" });
+  const m = week()[0];
+  assert.deepEqual([m.reason, m.billable], ["suspended", false]);
+  r.cancelClass(mon.key, { reason: "suspended", charge: true }); // "Cobrarla igual"
+  assert.deepEqual([week()[0].reason, week()[0].billable], ["suspended", true]);
+  const ex = r.addExtra(emma.id, { date: THU, start: "09:00", minutes: 60 });
+  r.cancelClass(ex, { reason: "missed" });
+  assert.deepEqual([week().find((c) => c.key === ex).reason, week().find((c) => c.key === ex).billable], ["missed", true]);
+  r.restoreClass(ex);
+  assert.deepEqual([week().find((c) => c.key === ex).status, week().find((c) => c.key === ex).reason], ["scheduled", null]);
+  rejects(() => r.cancelClass(wed.key, { reason: "lluvia" }), "invalid");
+});
+
+test("cancels saved before reasons keep their money and read as Faltó / Suspendida", () => {
+  const [mon, tue] = week();
+  const old = structuredClone(r.state);
+  old.changes.push({ id: 90, slot_id: mon.slot_id, date: mon.date, kind: "cancel", charge: true });
+  old.changes.push({ id: 91, slot_id: tue.slot_id, date: tue.date, kind: "cancel", charge: false });
+  const r2 = new Registry(old, { now: () => clock });
+  const [a, b] = r2.classesBetween(MON, TUE);
+  assert.deepEqual([a.reason, a.billable, b.reason, b.billable], ["missed", true, "suspended", false]);
+  assert.deepEqual(r2.exportTable("classes").rows.filter((x) => x[0] === MON || x[0] === TUE).map((x) => x[4]), ["Faltó (se cobra)", "Suspendida"]);
+});
+
 test("a moved class shows on its new day and keeps its original rate", () => {
   const key = week()[2].key; // Joaquín, Wednesday
   r.setRate(joaquin.id, 1500, THU);

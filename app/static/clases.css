@@ -66,6 +66,10 @@
 .clase.is-cancelled .clase-time, .clase.is-cancelled .clase-name { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--ink-2); }
 .clase.is-cancelled .state { color: var(--tomate-ink); }
 .clase.is-cancelled.is-charged .amount { color: var(--ink); }
+/* Faltó: the student didn't come, but the Clase is charged, so it isn't struck out like a suspended one. */
+.clase.is-missed { background: color-mix(in srgb, var(--tomate-ink) 6%, var(--paper)); }
+.clase.is-missed .clase-time, .clase.is-missed .clase-name { text-decoration: none; color: var(--ink); }
+.btn-note { font-weight: 600; color: var(--ink-2); font-size: .8125rem; }
 
 /* the rail */
 .rail { display: grid; gap: 16px; }

@@ -155,13 +155,15 @@ try {
   await page.waitForSelector("[data-testid=selected-class]");
   await shot("04-clase-elegida", false);
   const before = model(await saved()).week();
-  await page.tap("[data-testid=cancel-class]");
+  check("cancel", "Faltó is the first cancel action", (await page.$$eval("[data-testid=selected-class] .btn-col button", (bs) => bs.map((b) => b.dataset.testid)))[0] === "cancel-missed");
+  await page.tap("[data-testid=cancel-suspend]");
   await page.waitForSelector('[data-testid=clase].is-cancelled');
   st = await saved();
   const bruno = student(st, "Bruno Rodríguez");
   const brunoWedSlot = st.slots.find((s) => s.student_id === bruno.id && s.weekday === 3);
   const cancel = st.changes.find((c) => c.slot_id === brunoWedSlot.id && c.date === NOW.date);
-  check("cancel", "cancelling saves it, not charged", cancel?.kind === "cancel" && cancel.charge === false, JSON.stringify(cancel));
+  check("cancel", "'La suspendo yo' saves a suspension, not charged", cancel?.kind === "cancel" && cancel.charge === false && cancel.reason === "suspended", JSON.stringify(cancel));
+  check("cancel", "…and the label reads 'suspendida'", (await clase("Bruno Rodríguez", "miércoles 7 de octubre").getAttribute("aria-label")).includes("suspendida"));
   check("cancel", "the week's expected money drops by that class", model(st).week().expected === before.expected - 750, `${before.expected} → ${model(st).week().expected}`);
   await page.tap(".toast .btn");
   await page.waitForTimeout(200);
@@ -169,14 +171,18 @@ try {
 
   await clase("Martina López", "jueves 8 de octubre").tap();
   await page.waitForSelector("[data-testid=selected-class]");
-  await page.tap("[data-testid=cancel-charge]");
+  const owedBefore = model(await saved()).owing();
+  await page.tap("[data-testid=cancel-missed]");
   await page.waitForTimeout(150);
   check("undo", "only the latest toast offers Deshacer (an older one would undo later changes too)", (await page.$$(".toast [data-undo]")).length === 1);
   await page.waitForTimeout(200);
   st = await saved();
   const martina = student(st, "Martina López");
   const ch = st.changes.find((c) => c.date === "2026-10-08" && st.slots.find((s) => s.id === c.slot_id)?.student_id === martina.id);
-  check("cancel", "'Cancelar y cobrar igual' saves a charged cancellation that still counts", ch?.kind === "cancel" && ch.charge === true && model(st).week().total === before.total, JSON.stringify(ch));
+  check("cancel", "'Faltó' saves a charged cancellation that still counts", ch?.kind === "cancel" && ch.charge === true && ch.reason === "missed" && model(st).week().total === before.total, JSON.stringify(ch));
+  check("cancel", "…Te deben doesn't change, and the screen agrees with the maths", JSON.stringify(model(st).owing()) === JSON.stringify(owedBefore) && (await text("[data-testid=owing] .owing-total")) === money(model(st).owing().reduce((n, o) => n + o.owes_display, 0)));
+  const missedLabel = clase("Martina López", "jueves 8 de octubre");
+  check("cancel", "…and its label reads 'faltó', not struck out like a suspension", (await missedLabel.getAttribute("aria-label")).includes("faltó") && await missedLabel.evaluate((b) => b.classList.contains("is-missed") && getComputedStyle(b.querySelector(".clase-name")).textDecorationLine === "none"));
 
   await clase("Lucía Fernández", "sábado 10 de octubre").tap();
   await page.waitForSelector("[data-testid=selected-class]");

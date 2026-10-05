@@ -41,8 +41,14 @@ A one-off Clase outside any Horario fijo.
 A Clase from a Horario fijo held on another day or time. It keeps the Tarifa of its original date.
 
 **Cancelada**:
-A Clase that did not happen. It counts as money only when marked **se cobra** (charged anyway).
-_Avoid_: suspendida, borrada
+A Clase that did not happen. It counts as money only when it **se cobra** (is charged). Every Cancelada is either Faltó or Suspendida.
+_Avoid_: borrada
+
+**Faltó**:
+A Cancelada because the student didn't come. It se cobra.
+
+**Suspendida**:
+A Cancelada that she called off ("La suspendo yo"). It does not se cobra, unless she picks "Cobrarla igual".
 
 **Dada**:
 A Clase whose end time has passed and that was not cancelled.
