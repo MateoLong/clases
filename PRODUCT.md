@@ -36,7 +36,7 @@ A personal class book for one tutor, not a booking or invoicing system: no clien
 ## Capabilities and Constraints
 
 - Week agenda; students with rates and weekly slots; cancel / move / extra class; payments and balances; earnings per week and per month with charts; projection simulator; currency switch; backup / restore; Excel export.
-- Offline, single user, no login, Spanish (Uruguay), dd/mm dates, 24-hour times, week starts Monday.
+- Offline, single user, no login, Spanish (Uruguay), dates shown with the month name by default ("7 de octubre"; Ajustes can switch to "7 oct" or "7/10") and typed as day/month, 24-hour times, week starts Monday.
 - Her income data never leaves the iPad.
 
 ## Brand Commitments

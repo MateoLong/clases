@@ -235,6 +235,16 @@ test("projection: today's weekly slots plus N new students", () => {
   assert.equal(r.projection({ students: 0, rate: 900 }).extra.per_week, 0);
 });
 
+test("dates show with the month's name unless she picks another style", () => {
+  assert.equal(r.settings().date_style, "long");
+  assert.equal(r.updateSettings({ date_style: "numeric" }).date_style, "numeric");
+  assert.equal(r.updateSettings({ date_style: "short" }).date_style, "short");
+  rejects(() => r.updateSettings({ date_style: "american" }), "invalid");
+  const { date_style, ...oldSettings } = emptyState().settings; // a state saved before the setting existed
+  const old = new Registry({ ...emptyState(), settings: oldSettings }, { now: () => clock });
+  assert.equal(old.settings().date_style, "long");
+});
+
 test("USD switch uses her rate and refuses nonsense", () => {
   r.updateSettings({ currency: "USD", usd_rate: "42,5" });
   assert.equal(r.convert(850, "UYU"), 20);

@@ -33,7 +33,16 @@ const money = (v) => moneyIn(v, cur());
 
 const dayNum = (iso) => Number(iso.slice(8));
 const monNum = (iso) => Number(iso.slice(5, 7));
-const fmtDM = (iso) => `${dayNum(iso)}/${monNum(iso)}`;
+/** A date as she chose in Ajustes: "7 de octubre", "7 oct" or "7/10"; the year only when it isn't this one. */
+function fmtDM(iso, style = reg.state.settings.date_style) {
+  const d = dayNum(iso), m = monNum(iso), y = iso.slice(0, 4);
+  const other = y !== reg.today().slice(0, 4);
+  if (style === "numeric") return `${d}/${m}${other ? `/${y}` : ""}`;
+  if (style === "short") return `${d} ${MONTHS_SHORT[m - 1]}${other ? ` ${y}` : ""}`;
+  return `${d} de ${MONTHS[m - 1]}${other ? ` de ${y}` : ""}`;
+}
+/** A date inside a form: always typed as day/month, whatever the display style. */
+const fmtTyped = (iso) => `${dayNum(iso)}/${monNum(iso)}${iso.slice(0, 4) !== reg.today().slice(0, 4) ? `/${iso.slice(0, 4)}` : ""}`;
 const fmtDayLong = (iso) => `${DAYS[weekday(iso) - 1]} ${fmtDM(iso)}`;
 const fmtDayShort = (iso) => `${DAYS_SHORT[weekday(iso) - 1].toLowerCase()} ${fmtDM(iso)}`;
 function fmtDuration(min) {
@@ -272,7 +281,7 @@ function selectedPanel(c) {
     </div>
     <form class="move-form" hidden novalidate data-testid="move-form">
       <div class="row-2">
-        <label class="field"><span>Día</span><input class="input" name="date" value="${fmtDM(c.date)}" inputmode="numeric" placeholder="17/10"></label>
+        <label class="field"><span>Día</span><input class="input" name="date" value="${fmtTyped(c.date)}" inputmode="numeric" placeholder="17/10"></label>
         <label class="field"><span>Hora</span><input class="input" name="start" value="${c.start}" inputmode="numeric" placeholder="17:30"></label>
       </div>
       <label class="field"><span>Duración</span>${durationSelect("minutes", c.minutes, "move-minutes")}</label>
@@ -339,7 +348,7 @@ function extraForm(students, day) {
     <h2>Clase extra</h2>
     <label class="field"><span>Con</span><select class="input" name="student" data-testid="extra-student">${students.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></label>
     <div class="row-2">
-      <label class="field"><span>Día</span><input class="input" name="date" value="${fmtDM(day)}" inputmode="numeric" placeholder="17/10" data-testid="extra-date"></label>
+      <label class="field"><span>Día</span><input class="input" name="date" value="${fmtTyped(day)}" inputmode="numeric" placeholder="17/10" data-testid="extra-date"></label>
       <label class="field"><span>Hora</span><input class="input" name="start" value="" inputmode="numeric" placeholder="17:30" data-testid="extra-start"></label>
     </div>
     <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "extra-minutes")}</label>
@@ -455,7 +464,7 @@ function viewAlumno(id) {
   const upcoming = reg.classesBetween(today, addDays(today, 27)).filter((c) => c.student_id === s.id && c.status !== "given");
   const recent = reg.classesBetween(addDays(today, -56), today).filter((c) => c.student_id === s.id && c.status !== "scheduled").reverse();
   const pays = reg.payments(s.id);
-  const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}${r.from.slice(0, 4) !== today.slice(0, 4) ? `/${r.from.slice(0, 4)}` : ""}`}`).join(" · ") : "";
+  const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
   main.innerHTML = `
     <a class="back" href="#/alumnos">${icon("chevron-left")}Alumnos</a>
     <div class="detail-head">
@@ -476,12 +485,12 @@ function viewAlumno(id) {
         <form id="pay-form" class="inline-form" novalidate>
           <div class="row-2">
             <label class="field"><span>Pagó</span><input class="input" name="amount" inputmode="decimal" value="${s.owes > 0.004 ? s.owes : ""}" placeholder="${s.currency === "USD" ? "25" : "800"}" data-testid="pay-amount"></label>
-            <label class="field"><span>Día</span><input class="input" name="date" inputmode="numeric" value="${fmtDM(today)}" data-testid="pay-date"></label>
+            <label class="field"><span>Día</span><input class="input" name="date" inputmode="numeric" value="${fmtTyped(today)}" data-testid="pay-date"></label>
           </div>
           <div class="form-msg"></div>
           <button class="btn btn-go" type="submit" data-testid="pay-save">${icon("hand-coins")}Registrar pago</button>
         </form>
-        ${pays.length ? `<h3 class="sub-h">Pagos</h3><ul class="plain-list" data-testid="payments">${pays.slice(0, 12).map((p) => `<li class="pay-row"><span>${fmtDayLong(p.date)}${p.date.slice(0, 4) !== today.slice(0, 4) ? ` de ${p.date.slice(0, 4)}` : ""}</span><strong>${moneyIn(p.amount, p.currency)}</strong>
+        ${pays.length ? `<h3 class="sub-h">Pagos</h3><ul class="plain-list" data-testid="payments">${pays.slice(0, 12).map((p) => `<li class="pay-row"><span>${fmtDayLong(p.date)}</span><strong>${moneyIn(p.amount, p.currency)}</strong>
             <button type="button" class="btn btn-quiet btn-sm" data-unpay="${p.id}" aria-label="Borrar el pago de ${moneyIn(p.amount, p.currency)} del ${fmtDM(p.date)}">${icon("x")}</button></li>`).join("")}</ul>` : ""}
       </section>
 
@@ -497,7 +506,7 @@ function viewAlumno(id) {
                 <label class="field"><span>Hora</span><input class="input" name="start" value="${sl.start}" inputmode="numeric"></label>
                 <label class="field"><span>Duración</span>${durationSelect("minutes", sl.minutes)}</label>
               </div>
-              <label class="field"><span>Desde</span><input class="input" name="from" value="${fmtDM(today)}" inputmode="numeric"><small>Las clases de antes quedan como estaban.</small></label>
+              <label class="field"><span>Desde</span><input class="input" name="from" value="${fmtTyped(today)}" inputmode="numeric"><small>Las clases de antes quedan como estaban.</small></label>
               <div class="form-msg"></div>
               <button class="btn btn-go btn-sm" type="submit">Guardar el cambio</button>
             </form></li>`).join("")}</ul>` : `<p class="muted">No tiene un día fijo. Agregale uno, o anotá clases sueltas con "Clase extra" en la agenda.</p>`}
@@ -519,7 +528,7 @@ function viewAlumno(id) {
         <form id="rate-form" class="inline-form" novalidate>
           <div class="row-2">
             <label class="field"><span>Nueva tarifa por hora</span><input class="input" name="rate" inputmode="decimal" placeholder="${s.rate}" data-testid="rate-new"></label>
-            <label class="field"><span>Desde</span><input class="input" name="from" inputmode="numeric" value="${fmtDM(today)}" data-testid="rate-from"></label>
+            <label class="field"><span>Desde</span><input class="input" name="from" inputmode="numeric" value="${fmtTyped(today)}" data-testid="rate-from"></label>
           </div>
           <small class="muted">Las clases de antes de esa fecha se siguen cobrando a la tarifa vieja.</small>
           <div class="form-msg"></div>
@@ -665,7 +674,7 @@ function viewGanancias(params) {
   const owing = reg.owing().reduce((n, o) => n + o.owes_display, 0);
   const items = mode === "meses"
     ? months.map((m) => ({ label: MONTHS_SHORT[Number(m.month.slice(5)) - 1], long: `${MONTHS[Number(m.month.slice(5)) - 1]} ${m.month.slice(0, 4)}`, earned: m.earned, expected: m.expected, current: m.month === today.slice(0, 7) }))
-    : weeks.map((w) => ({ label: fmtDM(w.from), long: `Semana del ${fmtDM(w.from)}`, earned: w.earned, expected: w.expected, current: w.from === weekStart(today) }));
+    : weeks.map((w) => ({ label: fmtDM(w.from, reg.state.settings.date_style === "numeric" ? "numeric" : "short"), long: `Semana del ${fmtDM(w.from)}`, earned: w.earned, expected: w.expected, current: w.from === weekStart(today) }));
   const byStudent = reg.monthByStudent();
   const maxS = Math.max(...byStudent.map((s) => s.amount), 1);
 
@@ -789,7 +798,7 @@ function viewProyeccion() {
 function viewAjustes() {
   const s = reg.summary();
   main.innerHTML = `
-    <div class="page-head"><div><h1>Ajustes</h1><p>Moneda, copias de seguridad y planillas.</p></div></div>
+    <div class="page-head"><div><h1>Ajustes</h1><p>Moneda, fechas, copias de seguridad y planillas.</p></div></div>
     <div class="settings">
       <form class="panel" id="settings-form" novalidate>
         <h2>Moneda</h2>
@@ -800,6 +809,13 @@ function viewAjustes() {
         <div class="form-msg"></div>
         <div><button class="btn btn-go" type="submit" data-testid="settings-save">${icon("check")}Guardar</button></div>
       </form>
+      <div class="panel" data-testid="date-style">
+        <h2>Fechas</h2>
+        <fieldset class="field seg-field"><legend>Mostrar las fechas como</legend><div class="seg seg-wrap">
+          ${[["long", "date-long"], ["short", "date-short"], ["numeric", "date-numeric"]].map(([v, id]) => `<label><input type="radio" name="date_style" value="${v}" ${s.settings.date_style === v ? "checked" : ""} data-testid="${id}"><span>${fmtDM(s.today, v)}</span></label>`).join("")}
+        </div></fieldset>
+        <p class="muted">Para escribir una fecha, siempre día/mes: 17/10.</p>
+      </div>
       <div class="panel">
         <h2>Copia de seguridad</h2>
         <p>Todo se guarda <strong>solo en este iPad</strong>. Guardá una copia una vez por semana: queda en la app Archivos y desde ahí la podés mandar por mail o a Drive.</p>
@@ -829,6 +845,7 @@ function viewAjustes() {
           : `<p>Para probar sin miedo: alumnos, clases y pagos inventados que después podés borrar.</p><div><button type="button" class="btn btn-line" data-action="load-demo">${icon("sparkles")}Cargar datos de ejemplo</button></div>`}
       </div>
     </div>`;
+  $$("[name=date_style]").forEach((r) => r.addEventListener("change", () => act(() => reg.updateSettings({ date_style: r.value }), null, { undo: false })));
   const form = $("#settings-form");
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -897,6 +914,7 @@ function viewAyuda() {
         "<strong>Ganancias</strong> muestra lo ganado y lo agendado por mes o por semana. Una clase cancelada solo cuenta si la cobrás igual.",
         "<strong>¿Y si…?</strong> sirve para jugar: elegí cuántos alumnos nuevos, cuántas clases y a qué tarifa, y mirá cuánto cambia tu mes.",
         "Arriba a la derecha, <strong>UYU / USD</strong> pasa todo a pesos o a dólares, con la cotización que pusiste en Ajustes.",
+        "En <strong>Ajustes → Fechas</strong> elegís cómo se ven las fechas: 7 de octubre, 7 oct o 7/10. Para escribirlas, siempre día/mes.",
       ], ["#/ganancias", "Ver Ganancias"])}
       ${card("copia", "download", "Guardar una copia de seguridad", [
         "Todo está guardado solo en este iPad. Una vez por semana, tocá <strong>Ajustes → Guardar copia de seguridad</strong>. El archivo queda en la app Archivos: mandátelo por mail o a Drive, así no se pierde si le pasa algo al iPad.",

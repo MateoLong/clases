@@ -88,6 +88,7 @@ try {
   await page.waitForSelector("[data-testid=clase]");
   check("persistence", "after closing and reopening, everything is still there", (await page.$$("[data-testid=clase]")).length === 8);
   await shot("02-agenda");
+  check("dates", "by default dates read with the month's name", (await page.getAttribute("[data-testid=clase] >> nth=0", "aria-label")).includes("lunes 5 de octubre"), await page.getAttribute("[data-testid=clase] >> nth=0", "aria-label"));
 
   // ── F1b help: the "?" opens Cómo se usa, reads only, and its links lead back to the screens ──
   const beforeHelp = JSON.stringify(await saved());
@@ -129,7 +130,7 @@ try {
 
   // ── F3 cancel / charge / undo / move / extra on the agenda ──
   await go("agenda");
-  await clase("Bruno Rodríguez", "miércoles 7/10").tap();
+  await clase("Bruno Rodríguez", "miércoles 7 de octubre").tap();
   await page.waitForSelector("[data-testid=selected-class]");
   await shot("04-clase-elegida", false);
   const before = model(await saved()).week();
@@ -145,7 +146,7 @@ try {
   await page.waitForTimeout(200);
   check("cancel", "Deshacer brings the class back", !(await saved()).changes.some((c) => c.slot_id === brunoWedSlot.id && c.date === NOW.date));
 
-  await clase("Martina López", "jueves 8/10").tap();
+  await clase("Martina López", "jueves 8 de octubre").tap();
   await page.waitForSelector("[data-testid=selected-class]");
   await page.tap("[data-testid=cancel-charge]");
   await page.waitForTimeout(150);
@@ -156,7 +157,7 @@ try {
   const ch = st.changes.find((c) => c.date === "2026-10-08" && st.slots.find((s) => s.id === c.slot_id)?.student_id === martina.id);
   check("cancel", "'Cancelar y cobrar igual' saves a charged cancellation that still counts", ch?.kind === "cancel" && ch.charge === true && model(st).week().total === before.total, JSON.stringify(ch));
 
-  await clase("Lucía Fernández", "sábado 10/10").tap();
+  await clase("Lucía Fernández", "sábado 10 de octubre").tap();
   await page.waitForSelector("[data-testid=selected-class]");
   await page.tap("[data-testid=move-open]");
   check("fifty", "Mover keeps the class's own length (Lucía's 2 h)", (await page.inputValue("[data-testid=move-minutes]")) === "120");
@@ -169,7 +170,7 @@ try {
   const mv = st.changes.find((c) => c.kind === "move" && st.slots.find((s) => s.id === c.slot_id)?.student_id === lucia.id);
   readback.move = mv;
   check("move", "moving saves the new day and time", mv?.date === "2026-10-10" && mv.new_date === "2026-10-09" && mv.new_start === "18:00", JSON.stringify(mv));
-  check("move", "the label now sits on Friday", await clase("Lucía Fernández", "viernes 9/10").count() === 1 && await clase("Lucía Fernández", "sábado 10/10").count() === 0);
+  check("move", "the label now sits on Friday", await clase("Lucía Fernández", "viernes 9 de octubre").count() === 1 && await clase("Lucía Fernández", "sábado 10 de octubre").count() === 0);
   check("move", "moving can be undone from its toast", (await page.$$(".toast [data-undo]")).length === 1);
 
   await page.tap("[data-testid=extra-toggle]");
@@ -182,9 +183,9 @@ try {
   st = await saved();
   const sofia = student(st, "Sofía González");
   readback.extra = st.extras.filter((e) => e.student_id === sofia.id && e.date === "2026-10-08");
-  check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8/10").count() === 1, JSON.stringify(readback.extra));
+  check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8 de octubre").count() === 1, JSON.stringify(readback.extra));
   const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
-  check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8/10").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
+  check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
   await shot("05-agenda-cambios");
 
   // ── F4 Cobrar with the stamp; then undo ──
@@ -256,6 +257,28 @@ try {
   check("projection", "hours per day over a 5-day week, all students, today vs with the new ones", Math.abs(p3.total.hours_per_day - p3.total.hours_per_week / 5) < 0.01 && perDay.includes(`Serían ${fmt5(p3.total.hours_per_day)} por día`) && perDay.includes(`(hoy ${fmt5(p3.base.hours_per_day)})`), JSON.stringify(readback.perDay));
   await shot("09-proyeccion");
 
+  // ── F7b dates: the Ajustes choice changes every date, survives reload, typing stays day/month ──
+  await go("ajustes");
+  check("dates", "Ajustes offers the three styles with today's date as the example", (await page.$$eval("[data-testid=date-style] .seg span", (els) => els.map((e) => e.textContent).join(" | "))) === "7 de octubre | 7 oct | 7/10");
+  await page.tap("[data-testid=date-numeric] + span");
+  await page.waitForTimeout(150);
+  check("dates", "picking 7/10 is saved on the device", (await saved()).settings.date_style === "numeric");
+  await page.reload();
+  await go("agenda");
+  check("dates", "…and after reopening the agenda reads 7/10", await clase("Bruno Rodríguez", "miércoles 7/10").count() === 1);
+  await go(`alumnos/${martina.id}`);
+  check("dates", "…the student's payments too", (await text("[data-testid=payments] li >> nth=0")).match(/^\S+ \d{1,2}\/\d{1,2}/) !== null, await text("[data-testid=payments] li >> nth=0"));
+  check("dates", "a date field still holds day/month", (await page.inputValue("[data-testid=rate-from]")) === "7/10");
+  await go("ajustes");
+  await page.tap("[data-testid=date-short] + span");
+  await page.waitForTimeout(150);
+  await go("ganancias?ver=semanas");
+  check("dates", "'7 oct' style: weeks read 'Semana del 5 oct'", (await page.getAttribute("[data-testid=chart] .col.is-current", "aria-label")).startsWith("Semana del 5 oct"), await page.getAttribute("[data-testid=chart] .col.is-current", "aria-label"));
+  await go("ajustes");
+  await page.tap("[data-testid=date-long] + span");
+  await page.waitForTimeout(150);
+  check("dates", "back to '7 de octubre'", (await saved()).settings.date_style === "long");
+
   // ── F8 currency switch and exchange rate ──
   await go("ajustes");
   await page.fill("[data-testid=usd-rate]", "42,5");
@@ -284,6 +307,7 @@ try {
   await fresh.page.tap("#restore button[type=submit]");
   await fresh.page.waitForSelector("[data-testid=clase]");
   const [a, b] = [model(await saved()), model(await saved(fresh.page))];
+  check("backup", "the date style comes back with the copy", (await saved(fresh.page)).settings.date_style === (await saved()).settings.date_style);
   check("backup", "restoring the file on an empty iPad gives the same week, debts and months", JSON.stringify(a.week()) === JSON.stringify(b.week()) && JSON.stringify(a.owing()) === JSON.stringify(b.owing()) && JSON.stringify(a.months()) === JSON.stringify(b.months()));
   await fresh.ctx.close();
 

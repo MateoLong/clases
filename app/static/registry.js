@@ -2,8 +2,10 @@
 // them, payments, and the money maths. Pure logic: runs in the browser (saved on the iPad)
 // and in Node for the tests. The whole state is one plain object, so a backup is its JSON.
 
-export const DEFAULT_SETTINGS = { currency: "UYU", usd_rate: 40, title: "Mis clases" };
+export const DEFAULT_SETTINGS = { currency: "UYU", usd_rate: 40, title: "Mis clases", date_style: "long" };
 export const CURRENCIES = ["UYU", "USD"];
+/** How dates are shown: "7 de octubre", "7 oct" or "7/10". */
+export const DATE_STYLES = ["long", "short", "numeric"];
 /** The eight forro colours; each student gets one for good (least used first). */
 export const INKS = ["cobalto", "tomate", "pasto", "violeta", "turquesa", "rosa", "naranja", "girasol"];
 function nextInk(students) {
@@ -136,9 +138,13 @@ export class Registry {
   // ── settings & money ─────────────────────────────────────────────────
   settings() { return { ...this.state.settings }; }
 
-  updateSettings({ currency, usd_rate, title } = {}) {
+  updateSettings({ currency, usd_rate, title, date_style } = {}) {
     const ch = {};
     if (currency != null) ch.currency = validCurrency(currency);
+    if (date_style != null) {
+      if (!DATE_STYLES.includes(date_style)) throw new RegistryError("invalid", "Elegí cómo se ven las fechas.");
+      ch.date_style = date_style;
+    }
     if (usd_rate != null) {
       // A rate like "39,875" or "40.125" is always decimals: nobody pays 39.875 pesos for a dollar.
       const t = String(usd_rate).trim().replace(/\s|\$/g, "");

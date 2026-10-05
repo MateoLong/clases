@@ -141,6 +141,7 @@
 .seg-field legend { font-family: var(--font-ui); font-weight: 600; margin-bottom: 6px; padding: 0; }
 .seg { display: inline-grid; grid-auto-flow: column; background: var(--ground); border-radius: 999px; padding: 4px; }
 .seg label { position: relative; }
+.seg-wrap { display: inline-flex; flex-wrap: wrap; width: fit-content; max-width: 100%; border-radius: 24px; }
 .seg input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
 .seg span, .seg-links a { display: block; padding: 9px 14px; border-radius: 999px; font-family: var(--font-ui); font-weight: 700; color: var(--ink-2); white-space: nowrap; text-decoration: none; }
 .seg input:checked + span, .seg-links a[aria-current="true"] { background: var(--paper); color: var(--moña-deep); box-shadow: var(--shadow-1); }
