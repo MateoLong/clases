@@ -207,6 +207,33 @@ try {
   check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8 de octubre").count() === 1, JSON.stringify(readback.extra));
   const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
   check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
+  // ── F3b Planificación: written from the rail, kept on the device, shown on the label and the student page ──
+  const moneyBeforePlan = (() => { const x = model(st); const w = x.week(); return JSON.stringify([w.earned, w.expected, w.total, x.owing()]); })();
+  await clase("Bruno Rodríguez", "miércoles 7 de octubre").tap();
+  await page.waitForSelector("[data-testid=plan-form]");
+  await page.fill("[data-testid=plan-text]", "Fracciones equivalentes\nRepasar la tabla del 7");
+  await page.tap("[data-testid=plan-save]");
+  await page.waitForTimeout(200);
+  st = await saved();
+  const brunoKey = `s${brunoWedSlot.id}-${NOW.date}`;
+  readback.plan = st.plans;
+  check("plan", "the Planificación is saved for that Clase", st.plans.length === 1 && st.plans[0].key === brunoKey && st.plans[0].text === "Fracciones equivalentes\nRepasar la tabla del 7", JSON.stringify(st.plans));
+  check("plan", "…without changing any money", (() => { const x = model(st); const w = x.week(); return JSON.stringify([w.earned, w.expected, w.total, x.owing()]); })() === moneyBeforePlan);
+  await page.reload();
+  await page.waitForSelector("[data-testid=clase]");
+  check("plan", "after reopening, the label carries the pencil and says so", await clase("Bruno Rodríguez", "miércoles 7 de octubre").locator("[data-testid=plan-mark]").count() === 1 && (await clase("Bruno Rodríguez", "miércoles 7 de octubre").getAttribute("aria-label")).endsWith("con planificación"));
+  await go(`alumnos/${bruno.id}`);
+  check("plan", "the student page lists it under that Clase", (await text("[data-testid=student-classes] [data-testid=plan-line] >> nth=0")).includes("Fracciones equivalentes"), await text("[data-testid=student-classes]"));
+  await go("agenda");
+  await clase("Bruno Rodríguez", "miércoles 7 de octubre").tap();
+  await page.waitForSelector("[data-testid=plan-form]");
+  await page.fill("[data-testid=plan-text]", "");
+  await page.tap("[data-testid=plan-save]");
+  await page.waitForTimeout(200);
+  check("plan", "clearing it removes it", (await saved()).plans.length === 0);
+  await page.tap(".toast [data-undo] >> nth=-1");
+  await page.waitForTimeout(200);
+  check("plan", "Deshacer brings the plan back", (await saved()).plans.length === 1);
   await shot("05-agenda-cambios");
 
   // ── F4 Cobrar with the stamp; then undo ──

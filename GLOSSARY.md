@@ -30,6 +30,10 @@ _Avoid_: turno, slot, cita
 One sitting with one Alumno on one date. It comes from a Horario fijo, or it is a Clase extra.
 _Avoid_: sesión, lección, turno
 
+**Planificación**:
+What she plans to work on in one Clase. It belongs to that Clase and follows it when it is moved, cancelled or put back. It never changes money.
+_Avoid_: plan, notas (Notas belong to the Alumno)
+
 **Clase extra**:
 A one-off Clase outside any Horario fijo.
 

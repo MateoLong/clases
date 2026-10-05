@@ -256,9 +256,9 @@ function classLabel(c) {
     : c.status === "given" ? `<span class="state">${icon("check")}dada</span>`
     : c.moved_from ? `<span class="state">${icon("calendar-clock")}movida</span>`
     : c.kind === "extra" ? `<span class="state">${icon("plus")}extra</span>` : "";
-  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? "cancelada" : "agendada"}`;
+  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? "cancelada" : "agendada"}${c.plan ? ", con planificación" : ""}`;
   return `<button type="button" class="clase is-${c.status} ${c.charge ? "is-charged" : ""}" style="--c:${ink(c.student_id)}" data-key="${c.key}" aria-pressed="${c.key === selected}" aria-label="${esc(label)}" data-testid="clase">
-    <span class="clase-top"><span class="clase-time">${c.start}</span><span class="clase-dur">${fmtDuration(c.minutes)}</span></span>
+    <span class="clase-top"><span class="clase-time">${c.start}</span>${c.plan ? `<span class="plan-mark" data-testid="plan-mark">${icon("pencil")}</span>` : ""}<span class="clase-dur">${fmtDuration(c.minutes)}</span></span>
     <span class="clase-name hand">${esc(c.student)}</span>
     <span class="clase-foot"><span class="amount">${c.status === "cancelled" && !c.charge ? "—" : shown(c.amount, c.currency)}</span>${state}</span>
   </button>`;
@@ -288,6 +288,11 @@ function selectedPanel(c) {
       <div class="form-msg"></div>
       <button class="btn btn-go btn-sm" type="submit">Mover la clase</button>
     </form>
+    <form class="plan-form" novalidate data-testid="plan-form">
+      <label class="field"><span>Planificación</span><textarea class="input paste" name="plan" rows="3" placeholder="Qué van a trabajar: tema, ejercicios, qué repasar…" data-testid="plan-text">${esc(c.plan)}</textarea></label>
+      <div class="form-msg"></div>
+      <button class="btn btn-line btn-sm" type="submit" data-testid="plan-save">${icon("check")}Guardar planificación</button>
+    </form>
     <a class="link-small" href="#/alumnos/${c.student_id}">Ver la ficha de ${esc(c.student.split(" ")[0])}${icon("chevron-right")}</a>
   </section>`;
 }
@@ -299,6 +304,12 @@ function wireSelected(c, params) {
   $("[data-act=cancel]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key), `Cancelada: ${when}.`));
   $$("[data-act=cancel-charge]", panel).forEach((b) => b.addEventListener("click", () => act(() => reg.cancelClass(c.key, { charge: true }), `Cancelada, se cobra igual: ${when}.`)));
   $("[data-act=restore]", panel)?.addEventListener("click", () => act(() => reg.restoreClass(c.key), `La clase volvió a su día: ${when}.`));
+  const plan = $(".plan-form", panel);
+  plan.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (plan.plan.value.trim() === c.plan) return;
+    actInForm(plan, () => reg.setPlan(c.key, plan.plan.value), (t) => (t ? `Planificación guardada: ${when}.` : `Planificación borrada: ${when}.`));
+  });
   const form = $(".move-form", panel);
   $("[data-act=move-open]", panel).addEventListener("click", () => { form.hidden = !form.hidden; if (!form.hidden) form.date.focus(); });
   form.addEventListener("submit", (e) => {
@@ -470,6 +481,9 @@ function viewAlumnos(params) {
   });
 }
 
+/** A Clase's Planificación under its line in the student's lists. */
+const planLine = (c) => (c.plan ? `<p class="plan-line" data-testid="plan-line">${icon("pencil")}<span>${esc(c.plan)}</span></p>` : "");
+
 function viewAlumno(id) {
   const s = reg.student(id);
   const today = reg.today();
@@ -559,9 +573,9 @@ function viewAlumno(id) {
 
       <section class="panel" data-testid="student-classes">
         <h2>Próximas clases</h2>
-        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? "cancelada" : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span></li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
+        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? "cancelada" : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
         <h3 class="sub-h">Últimas clases</h3>
-        ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `cancelada · ${moneyIn(c.amount, c.currency)}` : "cancelada") : moneyIn(c.amount, c.currency)}</span></li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
+        ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `cancelada · ${moneyIn(c.amount, c.currency)}` : "cancelada") : moneyIn(c.amount, c.currency)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
       </section>
     </div>`;
 
@@ -903,10 +917,11 @@ function viewAyuda() {
         "Cada clase es una etiqueta en su día. Cuando termina su horario queda como <strong>dada</strong> y cuenta como ganada.",
         "Arriba de la semana (o en <strong>Esta semana</strong>, con el iPad acostado) ves lo ganado, lo que falta y el total.",
       ], ["#/agenda", "Ir a la Agenda"])}
-      ${card("cambiar", "calendar-x", "Cancelar o mover una clase", [
+      ${card("cambiar", "calendar-x", "Cancelar, mover o preparar una clase", [
         "En la <strong>Agenda</strong>, tocá la clase.",
         "Elegí <strong>Cancelar</strong> (no se cobra) o <strong>Cancelar y cobrar igual</strong>. Para cambiarla de día: <strong>Mover</strong>, escribí el día y la hora nuevos y tocá <strong>Mover la clase</strong>.",
         "Si la cancelaste o la moviste y querés dejarla como era, tocala y elegí <strong>Volver a su día y hora</strong>. (Una clase extra que moviste no tiene ese botón: movela de nuevo.)",
+        "Para preparar una clase, tocala y escribí en <strong>Planificación</strong> qué van a trabajar; tocá <strong>Guardar planificación</strong>. La etiqueta queda con un lápiz, y la planificación se ve también en la ficha del alumno.",
         "¿Te equivocaste? Tocá <strong>Deshacer</strong> en el aviso que aparece abajo.",
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("extra", "calendar-plus", "Anotar una clase extra", [

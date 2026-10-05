@@ -1,3 +1,4 @@
 # Agenda
 Path: Agenda (opens on this week, today highlighted) → ‹ › to change week, "Hoy" to come back.
 End state: each weekly slot appears as a label on its day. A label is "dada" once its end time has passed. Tapping a label selects it, and the rail then offers Cancelar / Cancelar y cobrar igual / Mover / Volver a su día. Every action can be undone from the toast. "Clase extra" adds a one-off class. The rail shows what she has earned this week, what is still to come, the week total and hours, and "Te deben", where each student has a Cobrar button that stamps PAGADO and saves a payment for exactly what is owed.
+Planificación: the selected Clase has a Planificación box; saving it marks the label with a pencil, it follows the Clase through Mover / Cancelar / Volver a su día, it is listed under that Clase on the student page, and it can be cleared or undone. It never changes money.

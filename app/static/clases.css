@@ -84,6 +84,12 @@
 .selected-head { display: flex; gap: 12px; align-items: center; }
 .selected-head h2 { font-size: 1.25rem; }
 .selected-money { margin: 12px 0; }
+.plan-form { margin-top: 14px; display: grid; gap: 8px; justify-items: start; }
+.plan-form .field { width: 100%; }
+.plan-mark { color: var(--ink-2); display: inline-flex; margin-left: auto; }
+.plan-mark svg, .plan-line svg { width: 14px; height: 14px; flex: none; }
+.plan-mark + .clase-dur { margin-left: 0; }
+.plan-line { flex-basis: 100%; display: flex; gap: 6px; align-items: baseline; margin: 2px 0 0; color: var(--ink-2); font-size: .9375rem; white-space: pre-line; overflow-wrap: anywhere; }
 .rail-selected .btn-col { gap: 8px; }
 .move-form { display: grid; gap: 10px; margin: 12px 0 4px; }
 .rail-selected .link-small { display: inline-block; margin-top: 12px; }

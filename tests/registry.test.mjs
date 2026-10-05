@@ -127,6 +127,40 @@ test("school details: optional, checked, editable, exported", () => {
   assert.deepEqual([r2.student(martina.id).school, r2.student(martina.id).grade], ["", null]);
 });
 
+test("a Clase keeps its Planificación through a move, a cancel and a restore", () => {
+  const key = week()[2].key; // Joaquín, today 18:30
+  const money = JSON.stringify([r.period(MON, "2026-10-11"), r.balance(joaquin.id)]);
+  assert.equal(r.setPlan(key, "  Fracciones: repaso  "), "Fracciones: repaso");
+  assert.equal(week()[2].plan, "Fracciones: repaso");
+  assert.equal(JSON.stringify([r.period(MON, "2026-10-11"), r.balance(joaquin.id)]), money); // a plan never changes money
+  r.moveClass(key, { date: THU, start: "10:00" });
+  assert.equal(week().find((c) => c.key === key).plan, "Fracciones: repaso");
+  r.cancelClass(key);
+  assert.equal(week().find((c) => c.key === key).plan, "Fracciones: repaso");
+  r.restoreClass(key);
+  assert.equal(week().find((c) => c.key === key).plan, "Fracciones: repaso");
+  r.setPlan(key, "Fracciones y decimales");
+  assert.equal(r.state.plans.length, 1);
+  r.setPlan(key, "   ");
+  assert.equal(week().find((c) => c.key === key).plan, "");
+  assert.equal(r.state.plans.length, 0);
+  const ex = r.addExtra(emma.id, { date: THU, start: "09:00", minutes: 50 });
+  r.setPlan(ex, "Reading");
+  assert.equal(week().find((c) => c.key === ex).plan, "Reading");
+  rejects(() => r.setPlan(`s1-${TUE}`, "x"), "not_found"); // Martina has no Tuesday class
+  rejects(() => r.setPlan("e999", "x"), "not_found");
+});
+
+test("plans travel in the backup, and a backup from before plans still restores", () => {
+  r.setPlan(week()[0].key, "Tablas del 7");
+  const other = new Registry(emptyState(), { now: () => clock });
+  other.restore(r.backup());
+  assert.equal(other.classesBetween(MON, MON)[0].plan, "Tablas del 7");
+  const { plans, ...old } = JSON.parse(r.backup());
+  other.restore(JSON.stringify(old));
+  assert.equal(other.classesBetween(MON, MON)[0].plan, "");
+});
+
 // ── rates & slots over time ──
 test("a raise applies from its date; past classes keep the old rate", () => {
   r.setRate(martina.id, 1000, THU);
@@ -321,7 +355,10 @@ test("demo data loads with history, a raise, cancellations and debts, and clears
   assert.ok(r.months(5, 0).every((m) => m.earned > 0));
   assert.ok(r.owing().length >= 2);
   assert.ok(r.state.changes.some((c) => c.kind === "cancel" && c.charge));
+  const demoClass = r.classesBetween(MON, THU).find((c) => c.student !== "Real");
+  r.setPlan(demoClass.key, "demo plan");
   r.clearDemo();
   assert.equal(r.summary().has_demo, false);
+  assert.equal(r.state.plans.length, 0);
   assert.deepEqual(r.students().map((s) => s.name), ["Real"]);
 });

@@ -30,6 +30,7 @@ export function emptyState() {
     version: 1,
     seq: { student: 0, rate: 0, slot: 0, change: 0, extra: 0, payment: 0 },
     students: [], rates: [], slots: [], changes: [], extras: [], payments: [],
+    plans: [], // { key, text }: the Planificación of one Clase, by its class key
     settings: { ...DEFAULT_SETTINGS },
     last_backup: null,
   };
@@ -439,6 +440,24 @@ export class Registry {
     return `e${id}`;
   }
 
+  /**
+   * The Planificación of one Clase: what she plans to work on. Kept by class key, so it
+   * follows the Clase when it is moved, cancelled or put back. Empty text removes it.
+   */
+  setPlan(key, text) {
+    const k = this._parseKey(key);
+    if (k.extra_id) { if (!this.state.extras.some((e) => e.id === k.extra_id)) throw new RegistryError("not_found", "No encontré esa clase."); }
+    else this._requireOccurrence(k);
+    const t = String(text ?? "").trim();
+    if (t.length > 4000) throw new RegistryError("invalid", "La planificación es demasiado larga.");
+    const id = String(key);
+    this._write((s) => {
+      s.plans = s.plans.filter((p) => p.key !== id);
+      if (t) s.plans.push({ key: id, text: t });
+    });
+    return t;
+  }
+
   _requireOccurrence({ slot_id, date }) {
     const slot = this.state.slots.find((s) => s.id === slot_id);
     if (!slot || weekday(date) !== slot.weekday || date < slot.from || (slot.to && date > slot.to)) {
@@ -457,6 +476,7 @@ export class Registry {
     const nowKey = `${now.date} ${now.time}`;
     const out = [];
     const changes = new Map(this.state.changes.map((c) => [`${c.slot_id}-${c.date}`, c]));
+    const plans = new Map(this.state.plans.map((p) => [p.key, p.text]));
     const stopped = new Map(this.state.students.filter((x) => x.archived && x.archived_at).map((x) => [x.id, x.archived_at]));
     const push = (o) => {
       if (stopped.has(o.student_id) && `${o.date} ${o.start}` >= stopped.get(o.student_id)) return; // after archiving
@@ -465,7 +485,7 @@ export class Registry {
       const status = o.cancelled ? "cancelled" : done ? "given" : "scheduled";
       const st = this.state.students.find((x) => x.id === o.student_id);
       const amount = round2((o.minutes / 60) * this.rateOn(o.student_id, o.rate_date || o.date));
-      out.push({ ...o, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name });
+      out.push({ ...o, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "" });
     };
     for (const slot of this.state.slots) {
       let d = addDays(from, (slot.weekday - weekday(from) + 7) % 7);
@@ -707,6 +727,8 @@ export class Registry {
       s.rates = s.rates.filter((x) => !demo.has(x.student_id));
       s.slots = s.slots.filter((x) => !demoSlots.has(x.id));
       s.changes = s.changes.filter((x) => !demoSlots.has(x.slot_id));
+      const demoExtras = new Set(s.extras.filter((x) => demo.has(x.student_id)).map((x) => x.id));
+      s.plans = s.plans.filter((p) => { const m = p.key.match(/^s(\d+)-|^e(\d+)$/); return !(m && (m[1] ? demoSlots.has(Number(m[1])) : demoExtras.has(Number(m[2])))); });
       s.extras = s.extras.filter((x) => !demo.has(x.student_id));
       s.payments = s.payments.filter((x) => !demo.has(x.student_id));
     });
