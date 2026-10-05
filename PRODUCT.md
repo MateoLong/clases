@@ -27,10 +27,12 @@ A personal class book for one tutor, not a booking or invoicing system: no clien
 ## Operating Context
 
 - Students mostly come at the **same weekly slot** (confirmed); she cancels, moves or adds an extra class when something changes.
-- A class counts as **earned once its time passes** unless she cancels it; she **marks payments**, so the app knows who owes her and how much (confirmed).
+- A class counts as **earned once its time passes** unless she suspends it; she **marks payments**, so the app knows who owes her and how much (confirmed).
+- Students **pay at the start of the month for the whole month** (the Cuota), and **a Clase the student misses is still charged**. One she suspends is not (confirmed 2026-10-04, ADR 0006).
+- Some students **have no fixed day** and book Clases one at a time (confirmed 2026-10-04).
 - Amounts are in **UYU**, with a switch to **USD** using an exchange rate **she types** in Ajustes (confirmed).
 - Rate changes apply from a date on; past classes keep the rate they had. *(inferred)*
-- A cancelled class can be marked "se cobra igual" (charged anyway). *(inferred)*
+- A suspended class can still be charged ("Cobrarla igual"). *(inferred)*
 - Each student's rate can be in UYU or USD; totals convert to the chosen currency. *(inferred)*
 
 ## Capabilities and Constraints

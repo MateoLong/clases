@@ -80,7 +80,7 @@ test("cancel, charge anyway, restore", () => {
   const key = week()[0].key;
   r.cancelClass(key);
   assert.deepEqual([week()[0].status, week()[0].billable], ["cancelled", false]);
-  assert.equal(r.balance(martina.id).owes, 800 * 5 - 800); // five Mondays since 1/9 minus this one
+  assert.equal(r.balance(martina.id).owes, 800 * 8 - 800); // every Monday of September and October (the Cuotas so far) minus this one
   r.cancelClass(key, { charge: true });
   assert.deepEqual([week()[0].status, week()[0].billable], ["cancelled", true]);
   r.restoreClass(key);
@@ -223,29 +223,32 @@ test("changing a slot from a date keeps the past on the old day", () => {
   assert.deepEqual(cs.map((c) => c.date), [MON, THU]);
 });
 
-test("archiving stops future classes and keeps the history and the debt", () => {
-  const before = r.balance(martina.id).owes;
+test("archiving stops future classes and keeps the history; the rest of the month leaves the Cuota", () => {
+  const before = r.balance(martina.id);
   r.setArchived(martina.id, true);
   assert.equal(r.classesBetween("2026-10-12", "2026-10-18").some((c) => c.student_id === martina.id), false);
-  assert.equal(r.balance(martina.id).owes, before);
+  assert.equal(r.balance(martina.id).earned_total, before.earned_total); // what was given stays
+  assert.equal(r.balance(martina.id).owes, before.owes - 3 * 800); // Mondays 12, 19 and 26 won't happen
 });
 
 // ── found by the independent verifier: past money must never change ──
 test("removing, changing or archiving from today keeps a class already given today", () => {
   clock.time = "20:00"; // Joaquín's Wednesday 18:30–20:00 class has just ended
   const slot = r.student(joaquin.id).slots[0];
-  const owes = r.balance(joaquin.id).owes;
+  const given = r.balance(joaquin.id).earned_total;
   const earned = r.week().earned;
   const snap = r.state;
+  const rest = 3 * 1800; // Wednesdays 14, 21, 28: what leaves October's Cuota when the slot stops
   r.endSlot(slot.id);
-  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 1800]); // only tonight's class stays in October
   r.replaceState(snap);
   r.changeSlot(slot.id, { start: "21:00" });
-  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 4 * 1800]);
   assert.equal(week().filter((c) => c.student_id === joaquin.id).length, 1); // not a second class tonight
   r.replaceState(snap);
+  const owes = r.balance(joaquin.id).owes;
   r.setArchived(joaquin.id, true);
-  assert.deepEqual([r.balance(joaquin.id).owes, r.week().earned], [owes, earned]);
+  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.balance(joaquin.id).owes], [given, earned, owes - rest]);
 });
 
 test("archiving also stops extra and moved classes still to come", () => {
@@ -295,13 +298,55 @@ test("more number formats", () => {
 
 // ── money ──
 test("payments lower what is owed; owing list in her currency", () => {
-  assert.equal(r.balance(martina.id).owes, 4000); // Mondays 7/9 … 5/10
+  assert.equal(r.balance(martina.id).owes, 6400); // the Cuotas of September and October: Mondays 7/9 … 26/10
   r.addPayment(martina.id, { amount: "3.200" });
-  assert.equal(r.balance(martina.id).owes, 800);
+  assert.equal(r.balance(martina.id).owes, 3200);
   const owing = r.owing();
-  assert.deepEqual(owing.map((o) => o.name), ["Joaquín Pereira", "Emma Acosta", "Martina López"]); // $ 9.000, $ 6.000, $ 800
+  assert.deepEqual(owing.map((o) => o.name), ["Joaquín Pereira", "Emma Acosta", "Martina López"]); // $ 16.200, $ 9.000, $ 3.200
   const e = owing.find((o) => o.name === "Emma Acosta");
-  assert.deepEqual([e.owes, e.currency, e.owes_display], [150, "USD", 150 * 40]); // six Tuesdays × US$ 25
+  assert.deepEqual([e.owes, e.currency, e.owes_display], [225, "USD", 225 * 40]); // nine Tuesdays × US$ 25
+});
+
+// ── the monthly Cuota (ADR 0006) ──
+test("on the 1st the whole month is owed: every Clase booked in it, past and future", () => {
+  clock.date = "2026-10-01"; clock.time = "08:00";
+  r.addPayment(martina.id, { amount: 4 * 800, date: "2026-09-02" }); // September paid
+  const c = r.cuota(martina.id);
+  assert.deepEqual([c.month, c.total, c.paid, c.left, c.classes.length], ["2026-10", 4 * 800, 0, 4 * 800, 4]);
+  assert.equal(r.balance(martina.id).owes, 4 * 800); // nothing given yet this month, all of it owed
+  assert.equal(r.balance(martina.id).earned_total, 4 * 800); // Ganado so far: September only
+  r.addPayment(martina.id, { amount: r.balance(martina.id).owes, date: "2026-10-01" }); // "Cobrar" on the 1st
+  assert.deepEqual([r.balance(martina.id).owes, r.cuota(martina.id).paid, r.cuota(martina.id).left], [0, 3200, 0]);
+  assert.equal(r.owing().some((o) => o.id === martina.id), false);
+});
+
+test("Faltó stays in the Cuota, Suspendida leaves it; after paying, a suspension is money a favor", () => {
+  r.addPayment(martina.id, { amount: 8 * 800 }); // September and October paid
+  assert.equal(r.balance(martina.id).owes, 0);
+  r.cancelClass(`s1-2026-10-12`, { reason: "missed" });
+  assert.equal(r.cuota(martina.id).total, 4 * 800);
+  r.cancelClass(`s1-2026-10-19`, { reason: "suspended" });
+  assert.equal(r.cuota(martina.id).total, 3 * 800);
+  const b = r.balance(martina.id);
+  assert.deepEqual([b.owes, b.credit], [-800, 800]);
+  assert.equal(r.cuota(martina.id).credit, 800);
+  assert.equal(r.owing().some((o) => o.id === martina.id), false); // a favor isn't owing
+  clock.date = "2026-11-02"; // November's Cuota (5 Mondays) minus the 800 a favor
+  assert.equal(r.balance(martina.id).owes, 5 * 800 - 800);
+  assert.deepEqual([r.cuota(martina.id).paid, r.cuota(martina.id).left], [800, 4 * 800]);
+});
+
+test("the Cuota follows the agenda: extras add, a raise prices by date, Ganado doesn't move", () => {
+  const months = JSON.stringify(r.months(1, 0).map((m) => [m.earned, m.expected]));
+  r.addExtra(martina.id, { date: THU, start: "10:00", minutes: 60 });
+  assert.equal(r.cuota(martina.id).total, 5 * 800);
+  r.setRate(martina.id, 1000, "2026-10-19");
+  assert.equal(r.cuota(martina.id).total, 3 * 800 + 2 * 1000); // 5, 8(extra), 12 at 800; 19, 26 at 1000
+  assert.equal(r.cuota(martina.id, "2026-09-15").total, 4 * 800); // September unchanged
+  // Ganado per month is about when Clases end, not about Cuotas: September and October's given part don't move
+  const after = JSON.parse(JSON.stringify(r.months(1, 0).map((m) => [m.earned, m.expected])));
+  assert.deepEqual(after[0], JSON.parse(months)[0]);
+  assert.equal(after[1][0], JSON.parse(months)[1][0]);
 });
 
 test("the week: earned so far, still to come, total, hours", () => {
@@ -429,7 +474,7 @@ test("demo data loads with history, a raise, cancellations and debts, and clears
   r.loadDemo(DEMO);
   assert.ok(r.summary().has_demo);
   assert.ok(r.months(5, 0).every((m) => m.earned > 0));
-  assert.ok(r.owing().length >= 2);
+  assert.ok(r.owing().length >= 1); // one student hasn't paid this month yet
   assert.ok(r.state.changes.some((c) => c.kind === "cancel" && c.charge));
   const demoClass = r.classesBetween(MON, THU).find((c) => c.student !== "Real");
   r.setPlan(demoClass.key, "demo plan");

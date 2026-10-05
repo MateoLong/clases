@@ -71,9 +71,16 @@ _Avoid_: previsto, proyectado (for this meaning)
 Money an Alumno handed over, on a date, in their currency. "Cobrar" records one for exactly what they owe.
 _Avoid_: cobro, abono
 
+**Cuota**:
+What an Alumno owes for one calendar month: every billable Clase of theirs dated in that month (a Faltó counts, a Suspendida doesn't), each at the Tarifa of its date. It is owed from the 1st (ADR 0006).
+_Avoid_: mensualidad, factura
+
 **Te deben**:
-For an Alumno: everything Ganado from them so far minus their Pagos.
+For an Alumno: the Cuotas of every month that has started, this one included, minus their Pagos.
 _Avoid_: saldo, deuda pendiente
+
+**A favor**:
+A Te deben below zero: the Alumno has paid more than their Cuotas so far (usually a Clase she suspended after the month was paid). It lowers the next month.
 
 ## Planning
 

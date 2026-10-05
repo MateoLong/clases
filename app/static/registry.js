@@ -567,13 +567,42 @@ export class Registry {
     return dates.sort()[0] || this.today();
   }
 
-  /** What the student has been charged so far (past billable classes) and paid, in their currency. */
+  _billable(studentId, from, to) {
+    return this.classesBetween(from, to).filter((c) => c.student_id === studentId && c.billable);
+  }
+  _paid(studentId) {
+    return round2(this.state.payments.filter((p) => p.student_id === studentId).reduce((n, p) => n + p.amount, 0));
+  }
+
+  /**
+   * A student's account, in their currency. They owe each month's Cuota from its 1st (ADR 0006):
+   * charged = every billable Clase up to the end of this month, so owes = charged − paid.
+   * A negative owes is money a favor. earned_total is what has already been given (Ganado).
+   */
   balance(studentId) {
     const id = Number(studentId);
-    const earned = round2(this.classesBetween(this._firstDate(), this.today())
-      .filter((c) => c.student_id === id && c.past && c.billable).reduce((n, c) => n + c.amount, 0));
-    const paid = round2(this.state.payments.filter((p) => p.student_id === id).reduce((n, p) => n + p.amount, 0));
-    return { earned_total: earned, paid_total: paid, owes: round2(earned - paid) };
+    const cs = this._billable(id, this._firstDate(), addDays(nextMonth(this.today()), -1));
+    const charged = round2(cs.reduce((n, c) => n + c.amount, 0));
+    const earned = round2(cs.filter((c) => c.past).reduce((n, c) => n + c.amount, 0));
+    const paid = this._paid(id);
+    const owes = round2(charged - paid);
+    return { charged_total: charged, earned_total: earned, paid_total: paid, owes, credit: owes < 0 ? -owes : 0 };
+  }
+
+  /**
+   * One month's Cuota for a student: every billable Clase of theirs in that month, each at the
+   * Tarifa of its date. Pagos pay the oldest months first, so `paid` is what reached this one.
+   */
+  cuota(studentId, date = this.today()) {
+    const id = Number(studentId);
+    this._requireStudent(id);
+    const from = monthStart(date), to = addDays(nextMonth(date), -1);
+    const classes = this.classesBetween(from, to).filter((c) => c.student_id === id);
+    const total = round2(classes.filter((c) => c.billable).reduce((n, c) => n + c.amount, 0));
+    const before = round2(this._billable(id, this._firstDate(), addDays(from, -1)).reduce((n, c) => n + c.amount, 0));
+    const remaining = round2(this._paid(id) - before); // what their Pagos leave once earlier months are paid
+    const paid = round2(Math.min(Math.max(remaining, 0), total));
+    return { month: from.slice(0, 7), from, to, classes, total, paid, left: round2(total - paid), credit: round2(Math.max(remaining - total, 0)) };
   }
 
   /** Students who owe money, most first. Amounts in each student's currency and in hers. */
@@ -741,15 +770,14 @@ export class Registry {
     if (cs[2]) this.cancelClass(cs[2].key, { reason: "missed" });
     if (cs[3]) this.moveClass(cs[3].key, { date: addDays(cs[3].date, 1), start: "19:00" });
     this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "12:30", minutes: 90 }); // Saturday, after Lucía
-    // payments: each month paid in its first days; two students have not paid last month yet
+    // payments: each month's Cuota paid in its first days; one student hasn't paid this month yet
     const thisMonth = monthStart(today);
     for (const [i, id] of ids.entries()) {
-      for (let m = monthStart(start); m < thisMonth; m = nextMonth(m)) {
-        const late = (i === 1 || i === 3) && nextMonth(m) === thisMonth;
-        if (late) continue;
-        const due = this.classesBetween(m, addDays(nextMonth(m), -1)).filter((c) => c.student_id === id && c.billable).reduce((n, c) => n + c.amount, 0);
-        const paidOn = addDays(nextMonth(m), i); // first days of the next month
-        if (due > 0 && paidOn <= today) this.addPayment(id, { amount: round2(due), date: paidOn });
+      for (let m = monthStart(start); m <= thisMonth; m = nextMonth(m)) {
+        if (i === 3 && m === thisMonth) continue; // late
+        const due = this.cuota(id, m).total;
+        const paidOn = addDays(m, i); // first days of the month
+        if (due > 0 && paidOn <= today) this.addPayment(id, { amount: due, date: paidOn });
       }
     }
     return this.summary();

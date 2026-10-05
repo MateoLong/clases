@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, extname, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readXlsx } from "../../app/static/xlsx.js";
-import { Registry } from "../../app/static/registry.js";
+import { Registry, weekStart } from "../../app/static/registry.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const STATIC = join(ROOT, "app", "static");
@@ -52,9 +52,9 @@ try {
   const wk = await webkit.launch();
   browsers.push(wk);
   const consoleErrors = [];
-  const newIpad = async (opts = LAND) => {
+  const newIpad = async (opts = LAND, now = NOW) => {
     const ctx = await wk.newContext({ ...opts, acceptDownloads: true });
-    await ctx.addInitScript((n) => { globalThis.CLASES_NOW = n; }, NOW);
+    await ctx.addInitScript((n) => { globalThis.CLASES_NOW = n; }, now);
     const p = await ctx.newPage();
     p.on("pageerror", (e) => consoleErrors.push(e.message));
     p.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text()));
@@ -325,6 +325,11 @@ try {
   st = await saved();
   m = model(st);
   check("rate", "a raise from 12/10 leaves this week at the old rate", m.rateOn(martina.id, "2026-10-08") === 800 && m.rateOn(martina.id, "2026-10-12") === 950);
+  await page.waitForSelector("[data-testid=this-month]");
+  const cu = m.cuota(martina.id);
+  readback.cuota = { screen: [await text("[data-testid=cuota-total]"), await text("[data-testid=cuota-paid]"), await text("[data-testid=cuota-left]")], model: [cu.total, cu.paid, cu.left, cu.credit] };
+  check("cuota", "her page shows October's Cuota, what's paid and what's left, as the maths says", readback.cuota.screen.join("|") === [cu.total, cu.paid, cu.credit > 0 ? cu.credit : cu.left].map(money).join("|") && cu.classes.some((c) => c.date > NOW.date && c.billable), JSON.stringify(readback.cuota));
+  check("cuota", "…a raise from 12/10 prices the rest of October's Cuota at the new rate", cu.total === cu.classes.filter((c) => c.billable).reduce((n, c) => n + c.amount, 0) && cu.classes.some((c) => c.date >= "2026-10-12" && c.billable && c.amount === 950));
   await shot("07-ficha");
 
   // ── F6 Ganancias ──
@@ -446,6 +451,37 @@ try {
   st = await saved(); // the demo was cleared just above
   readback.afterClear = { students: st.students.map((s) => s.name), slots: st.slots.length, payments: st.payments.length };
   check("clear-demo", "only demo students go; Valentina (with her slot), Tomás and Real Uno stay", JSON.stringify(readback.afterClear) === JSON.stringify({ students: ["Valentina Ríos", "Tomás Libre", "Real Uno"], slots: 1, payments: 0 }), JSON.stringify(readback.afterClear));
+
+  // ── F11 the monthly Cuota on the 1st: Cobrar takes the whole month; a suspension after paying is money a favor ──
+  const FIRST = { date: "2026-10-01", time: "09:00" };
+  const first = await newIpad(LAND, FIRST);
+  await go("agenda", first.page);
+  await first.page.tap("[data-action=load-demo]");
+  await first.page.waitForSelector("[data-testid=owing] [data-pay]");
+  let fst = await saved(first.page);
+  const fm = new Registry(structuredClone(fst), { now: () => FIRST });
+  const ftop = fm.owing()[0];
+  const fcu = fm.cuota(ftop.id);
+  check("cuota", "on the 1st, the first student in Te deben owes October's whole Cuota though no October class has happened yet", ftop.owes === fcu.total && fcu.total > 0 && fcu.classes.every((c) => !c.past), JSON.stringify({ owes: ftop.owes, cuota: fcu.total }));
+  await first.page.locator(`[data-testid=owing] li[data-student="${ftop.id}"] [data-pay]`).tap();
+  await first.page.waitForTimeout(1300);
+  fst = await saved(first.page);
+  const fpay = fst.payments.at(-1);
+  check("cuota", "Cobrar on the 1st records the whole month in one tap", fpay.student_id === ftop.id && fpay.amount === fcu.total && fpay.date === FIRST.date && new Registry(structuredClone(fst), { now: () => FIRST }).balance(ftop.id).owes === 0, JSON.stringify(fpay));
+  const fnext = new Registry(structuredClone(fst), { now: () => FIRST }).cuota(ftop.id).classes.find((c) => c.billable && !c.past);
+  await go(`agenda?semana=${weekStart(fnext.date)}`, first.page);
+  await first.page.locator(`[data-testid=clase][data-key="${fnext.key}"]`).tap();
+  await first.page.tap("[data-testid=cancel-suspend]");
+  await first.page.waitForTimeout(200);
+  await go(`alumnos/${ftop.id}`, first.page);
+  const fb = new Registry(structuredClone(await saved(first.page)), { now: () => FIRST }).balance(ftop.id);
+  check("cuota", "suspending a paid Clase leaves that money a favor, shown on the student's page", fb.credit === fnext.amount && (await text("[data-testid=student-owes]", first.page)) === money(fnext.amount) && (await text("[data-testid=account]", first.page)).includes("a favor"), JSON.stringify(fb));
+  await go("agenda", first.page);
+  check("cuota", "…and a student with money a favor isn't listed in Te deben", await first.page.locator(`[data-testid=owing] li[data-student="${ftop.id}"]`).count() === 0);
+  await go("agenda?semana=no-es-una-fecha", first.page);
+  check("agenda", "a malformed week in the address opens this week instead of hanging", (await text("#week-h", first.page)) === "28 de septiembre – 4 de octubre");
+  await shot("11-cuota-a-favor", true, first.page);
+  await first.ctx.close();
 
   // ── Offline ──
   await go("agenda");

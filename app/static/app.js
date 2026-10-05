@@ -180,7 +180,9 @@ let extraOpen = false;
 
 function viewAgenda(params) {
   const today = reg.today();
-  const from = params.get("semana") || weekStart(today);
+  const asked = params.get("semana");
+  // a week from the address is trusted only if it is a real date (a bad one would loop forever)
+  const from = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && !Number.isNaN(Date.parse(`${asked}T12:00:00`)) ? weekStart(asked) : weekStart(today);
   const week = reg.week(from);
   const classes = week.classes_list;
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i)).filter((d, i) => i < 6 || classes.some((c) => c.date === d));
@@ -330,6 +332,7 @@ function owingPanel() {
   const total = owing.reduce((n, o) => n + o.owes_display, 0);
   return `<section class="panel rail-owing" id="owing" data-testid="owing">
     <h2>Te deben ${owing.length ? `<span class="owing-total">${money(total)}</span>` : ""}</h2>
+    <p class="muted small-note">El mes entero se cobra desde el 1º.</p>
     ${owing.length ? `<ul class="owing-list">${owing.map((o) => `<li data-student="${o.id}" style="--c:${ink(o.id)}">
         <span class="swatch-dot" style="--c:${ink(o.id)}" aria-hidden="true"></span>
         <a href="#/alumnos/${o.id}" class="owing-name">${esc(o.name)}</a>
@@ -462,7 +465,7 @@ function viewAlumnos(params) {
           <span class="student-main"><strong>${esc(s.name)}</strong>${s.archived ? ' <span class="pill pill-off">Archivado</span>' : ""}
             <span class="muted">${s.grade ? `${s.grade}º · ` : ""}${s.slots.length ? s.slots.map(slotText).join(" · ") : "Sin día fijo"}</span></span>
           <span class="student-rate">${moneyIn(s.rate, s.currency)}<small>por hora</small></span>
-          <span class="student-owes">${s.owes > 0.004 ? `<span class="pill pill-late">Debe ${moneyIn(s.owes, s.currency)}</span>` : `<span class="pill pill-ok">Al día</span>`}</span>
+          <span class="student-owes">${s.owes > 0.004 ? `<span class="pill pill-late">Debe ${moneyIn(s.owes, s.currency)}</span>` : s.credit > 0.004 ? `<span class="pill pill-ok">A favor ${moneyIn(s.credit, s.currency)}</span>` : `<span class="pill pill-ok">Al día</span>`}</span>
         </a></li>`).join("")}</ul>`
       : `<div class="empty-state"><h3>Todavía no hay alumnos</h3><p>Agregá el primero con el botón amarillo: nombre, tarifa y su día de clase.</p></div>`}
     <p><a class="btn btn-quiet" href="#/alumnos${showArchived ? "" : "?archivados=1"}">${showArchived ? "Ocultar archivados" : "Ver archivados"}</a></p>`;
@@ -506,6 +509,7 @@ function viewAlumno(id) {
   const upcoming = reg.classesBetween(today, addDays(today, 27)).filter((c) => c.student_id === s.id && c.status !== "given");
   const recent = reg.classesBetween(addDays(today, -56), today).filter((c) => c.student_id === s.id && c.status !== "scheduled").reverse();
   const pays = reg.payments(s.id);
+  const cuota = reg.cuota(s.id);
   const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
   main.innerHTML = `
     <a class="back" href="#/alumnos">${icon("chevron-left")}Alumnos</a>
@@ -522,9 +526,15 @@ function viewAlumno(id) {
     <div class="detail-grid">
       <section class="panel account" data-testid="account">
         <h2>Cuenta</h2>
-        <p class="hero-figure ${s.owes > 0.004 ? "is-owed" : ""}" data-testid="student-owes">${s.owes > 0.004 ? moneyIn(s.owes, s.currency) : "Al día"}</p>
-        <p class="muted">${s.owes > 0.004 ? "te debe" : "no te debe nada"}${s.currency !== cur() && s.owes > 0.004 ? ` · ${shown(s.owes, s.currency)}` : ""}</p>
-        <dl class="stats"><div><dt>Clases cobrables hasta hoy</dt><dd>${moneyIn(s.earned_total, s.currency)}</dd></div><div><dt>Pagado</dt><dd>${moneyIn(s.paid_total, s.currency)}</dd></div></dl>
+        <p class="hero-figure ${s.owes > 0.004 ? "is-owed" : s.credit > 0.004 ? "is-credit" : ""}" data-testid="student-owes">${s.owes > 0.004 ? moneyIn(s.owes, s.currency) : s.credit > 0.004 ? moneyIn(s.credit, s.currency) : "Al día"}</p>
+        <p class="muted">${s.owes > 0.004 ? "te debe" : s.credit > 0.004 ? "tiene a favor (va para el mes que viene)" : "no te debe nada"}${s.currency !== cur() && (s.owes > 0.004 || s.credit > 0.004) ? ` · ${shown(Math.abs(s.owes), s.currency)}` : ""}</p>
+        <dl class="stats" data-testid="this-month">
+          <div><dt>Cuota de ${MONTHS[monNum(today) - 1]} <span class="muted">(${plural(cuota.classes.filter((c) => c.billable).length, "clase", "clases")})</span></dt><dd data-testid="cuota-total">${moneyIn(cuota.total, s.currency)}</dd></div>
+          <div><dt>Pagado de este mes</dt><dd data-testid="cuota-paid">${moneyIn(cuota.paid, s.currency)}</dd></div>
+          <div><dt>${cuota.credit > 0.004 ? "A favor" : "Falta de este mes"}</dt><dd data-testid="cuota-left">${moneyIn(cuota.credit > 0.004 ? cuota.credit : cuota.left, s.currency)}</dd></div>
+          ${s.owes - cuota.left > 0.004 ? `<div><dt>De meses anteriores</dt><dd data-testid="cuota-before">${moneyIn(s.owes - cuota.left, s.currency)}</dd></div>` : ""}
+        </dl>
+        <p class="muted small-note">Cada mes se debe entero desde el 1º. Si faltó, se cobra igual; si la suspendiste vos, no.</p>
         <form id="pay-form" class="inline-form" novalidate>
           <div class="row-2">
             <label class="field"><span>Pagó</span><input class="input" name="amount" inputmode="decimal" value="${s.owes > 0.004 ? s.owes : ""}" placeholder="${s.currency === "USD" ? "25" : "800"}" data-testid="pay-amount"></label>
@@ -969,7 +979,9 @@ function viewAyuda() {
         "Si choca con otra clase de ese día, te avisa con quién.",
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("cobrar", "hand-coins", "Cobrar", [
-        "En la Agenda, <strong>Te deben</strong> muestra quién te debe y cuánto. <strong>Cobrar</strong> anota que te pagó todo lo que debía.",
+        "Cada alumno te debe la <strong>cuota del mes</strong> desde el día 1º: todas sus clases de ese mes. Si falta a una, se cobra igual; si la suspendés vos, se descuenta.",
+        "En la Agenda, <strong>Te deben</strong> muestra quién te debe y cuánto. A principio de mes, <strong>Cobrar</strong> anota que te pagó el mes entero.",
+        "En su ficha, <strong>Cuenta</strong> muestra la cuota de este mes, cuánto pagó y cuánto falta. Si pagó de más (por ejemplo, le suspendiste una clase), queda <strong>a favor</strong> para el mes siguiente.",
         "Si te pagó una parte: entrá a su ficha en <strong>Alumnos</strong>, escribí lo que pagó y tocá <strong>Registrar pago</strong>.",
         "¿Anotaste mal un pago? Borralo con la <strong>✕</strong> en la lista de pagos de su ficha.",
       ])}
