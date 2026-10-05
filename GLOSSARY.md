@@ -26,6 +26,9 @@ _Avoid_: tipo de cambio, dólar
 An Alumno's weekly slot (a weekday, a start time and a length) in force from one date until, optionally, another.
 _Avoid_: turno, slot, cita
 
+**Sin día fijo**:
+An Alumno with no Horario fijo in force: they come when they can. All their Clases are Clases extra, booked one at a time ("Agendar clase" on their page).
+
 **Clase**:
 One sitting with one Alumno on one date. It comes from a Horario fijo, or it is a Clase extra.
 _Avoid_: sesión, lección, turno

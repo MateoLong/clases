@@ -88,6 +88,9 @@
 .selected-head { display: flex; gap: 12px; align-items: center; }
 .selected-head h2 { font-size: 1.25rem; }
 .selected-money { margin: 12px 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.panel-head h2 { margin: 0; }
+#book-form { margin: 12px 0 4px; }
 .plan-form { margin-top: 14px; display: grid; gap: 8px; justify-items: start; }
 .plan-form .field { width: 100%; }
 .plan-mark { color: var(--ink-2); display: inline-flex; margin-left: auto; }

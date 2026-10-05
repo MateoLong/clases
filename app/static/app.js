@@ -447,7 +447,7 @@ function viewAlumnos(params) {
           <label><input type="radio" name="currency" value="USD"><span>US$ USD</span></label></div></fieldset>
       </div>
       <details class="form-more" data-testid="new-school-toggle"><summary>Datos del colegio <span class="muted">(opcional)</span></summary>${schoolInputs({}, "new")}</details>
-      <p class="form-sub">Su clase de todas las semanas <span class="muted">(después podés agregar más días)</span></p>
+      <p class="form-sub">Su clase de todas las semanas <span class="muted">(o dejá <strong>Sin día fijo</strong> si viene cuando puede: sus clases las agendás de a una)</span></p>
       <div class="grid-slot">
         <label class="field"><span>Día</span><select class="input" name="weekday" data-testid="new-weekday"><option value="">Sin día fijo</option>${DAYS.map((d, i) => `<option value="${i + 1}">${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select></label>
         <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:00" data-testid="new-start"></label>
@@ -476,6 +476,10 @@ function viewAlumnos(params) {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const f = form;
+    if (!f.weekday.value && f.start.value.trim()) {
+      $(".form-msg", f).innerHTML = `<div class="notice notice-error" role="alert">Elegí el día de su clase, o borrá la hora si no tiene día fijo.</div>`;
+      return;
+    }
     const s = actInForm(f, () => {
       const st = reg.addStudent({ name: f.name.value, rate: f.rate.value, currency: f.currency.value, from: "2000-01-01", ...schoolValues(f) });
       if (f.weekday.value) reg.addSlot(st.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value });
@@ -483,6 +487,14 @@ function viewAlumnos(params) {
     }, (st) => `Agregado: ${st.name}.`);
     if (s) location.hash = `#/alumnos/${s.id}`;
   });
+}
+
+/** The first day from today (Sundays aside) on which this student has no Clase yet. */
+function nextFreeDay(studentId) {
+  let d = reg.today();
+  const taken = new Set(reg.classesBetween(d, addDays(d, 27)).filter((c) => c.student_id === studentId && !c.cancelled).map((c) => c.date));
+  while (taken.has(d) || weekday(d) === 7) d = addDays(d, 1);
+  return d;
 }
 
 /** A Clase's Planificación under its line in the student's lists. */
@@ -540,7 +552,7 @@ function viewAlumno(id) {
               <label class="field"><span>Desde</span><input class="input" name="from" value="${fmtTyped(today)}" inputmode="numeric"><small>Las clases de antes quedan como estaban.</small></label>
               <div class="form-msg"></div>
               <button class="btn btn-go btn-sm" type="submit">Guardar el cambio</button>
-            </form></li>`).join("")}</ul>` : `<p class="muted">No tiene un día fijo. Agregale uno, o anotá clases sueltas con "Clase extra" en la agenda.</p>`}
+            </form></li>`).join("")}</ul>` : `<p class="muted" data-testid="no-fixed-day">Sin día fijo: viene cuando puede. Agendá cada clase con <strong>Agendar clase</strong>, o agregale un día si empieza a venir siempre el mismo.</p>`}
         ${s.archived ? "" : `<form id="slot-add" class="inline-form" novalidate>
           <h3 class="sub-h">Agregar un día</h3>
           <div class="grid-slot">
@@ -576,13 +588,35 @@ function viewAlumno(id) {
       </section>
 
       <section class="panel" data-testid="student-classes">
-        <h2>Próximas clases</h2>
-        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? cancelText(c) : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agregale un día en <strong>Días de clase</strong>."}</p>`}
+        <div class="panel-head"><h2>Próximas clases</h2>
+          ${s.archived ? "" : `<button type="button" class="btn ${s.slots.length ? "btn-line" : "btn-go"} btn-sm" data-act="book-open" aria-expanded="false" data-testid="book-open">${icon("calendar-plus")}Agendar clase</button>`}</div>
+        ${s.archived ? "" : `<form id="book-form" class="inline-form" hidden novalidate data-testid="book-form">
+          <div class="grid-slot">
+            <label class="field"><span>Día</span><input class="input" name="date" value="${fmtTyped(nextFreeDay(s.id))}" inputmode="numeric" placeholder="17/10" data-testid="book-date"></label>
+            <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:30" data-testid="book-start"></label>
+            <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "book-minutes")}</label>
+          </div>
+          <div class="form-msg"></div>
+          <button class="btn btn-go btn-sm" type="submit" data-testid="book-save">${icon("check")}Agendar</button>
+        </form>`}
+        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? cancelText(c) : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agendale una con <strong>Agendar clase</strong>."}</p>`}
         <h3 class="sub-h">Últimas clases</h3>
         ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `${c.reason === "missed" ? "faltó" : "suspendida"} · ${moneyIn(c.amount, c.currency)}` : "suspendida") : moneyIn(c.amount, c.currency)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
       </section>
     </div>`;
 
+  const book = $("#book-form");
+  $("[data-act=book-open]")?.addEventListener("click", (e) => {
+    book.hidden = !book.hidden;
+    e.currentTarget.setAttribute("aria-expanded", String(!book.hidden));
+    if (!book.hidden) book.start.focus();
+  });
+  book?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const date = parseDM(book.date.value);
+    if (!date) { $(".form-msg", book).innerHTML = `<div class="notice notice-error" role="alert">No entendí el día. Escribilo como 17/10.</div>`; return; }
+    actInForm(book, () => reg.addExtra(s.id, { date, start: book.start.value, minutes: book.minutes.value }), `Clase agendada: ${fmtDayLong(date)} a las ${book.start.value.trim()}.`);
+  });
   $("[data-act=archive]").addEventListener("click", () => act(() => reg.setArchived(s.id, !s.archived), s.archived ? `${s.name} volvió a la lista.` : `${s.name} archivado. Sus clases futuras se quitaron; lo cobrado queda.`));
   const pay = $("#pay-form");
   pay.addEventListener("submit", (e) => {
@@ -931,7 +965,8 @@ function viewAyuda() {
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("extra", "calendar-plus", "Anotar una clase extra", [
         "En la <strong>Agenda</strong>, tocá el botón amarillo <strong>Clase extra</strong>.",
-        "Elegí con quién, el día, la hora y cuánto dura, y tocá <strong>Agregar</strong>.",
+        "Elegí con quién, el día, la hora y cuánto dura, y tocá <strong>Agregar</strong>. (También podés hacerlo desde su ficha, con <strong>Agendar clase</strong>.)",
+        "Si choca con otra clase de ese día, te avisa con quién.",
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("cobrar", "hand-coins", "Cobrar", [
         "En la Agenda, <strong>Te deben</strong> muestra quién te debe y cuánto. <strong>Cobrar</strong> anota que te pagó todo lo que debía.",
@@ -939,7 +974,8 @@ function viewAyuda() {
         "¿Anotaste mal un pago? Borralo con la <strong>✕</strong> en la lista de pagos de su ficha.",
       ])}
       ${card("alumnos", "user-plus", "Alumnos y tarifas", [
-        "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por hora (en pesos o dólares) y su día y hora de clase.",
+        "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por hora (en pesos o dólares) y su día y hora de clase. Si viene cuando puede, dejá <strong>Sin día fijo</strong>.",
+        "Para agendarle una clase a cualquiera (sobre todo a los que no tienen día fijo), en su ficha tocá <strong>Agendar clase</strong>: día, hora y cuánto dura.",
         "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Tocando el mail se abre Mail para escribirle.",
         "En su ficha podés agregar otro día, cambiarlo o quitarlo.",
         "Para subirle la tarifa, usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",

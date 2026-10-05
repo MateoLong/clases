@@ -149,6 +149,46 @@ try {
   check("students", "…and nothing was saved", (await saved()).slots.filter((s) => s.student_id === vale.id).length === 1);
   await shot("03-alumno-nuevo");
 
+  // ── F2b a student without a fixed day: booked from their own page ──
+  await go("alumnos");
+  await page.tap("[data-testid=add-student-toggle]");
+  await page.fill("[data-testid=new-name]", "Tomás Libre");
+  await page.fill("[data-testid=new-rate]", "900");
+  await page.fill("[data-testid=new-start]", "10:00"); // an hour but no day
+  await page.tap("[data-testid=new-save]");
+  await page.waitForSelector("#add-student .notice-error");
+  check("flexible", "an hour without a day is refused (she meant a day, or no fixed day)", !student(await saved(), "Tomás Libre"));
+  await page.fill("[data-testid=new-start]", "");
+  await page.tap("[data-testid=new-save]");
+  await page.waitForSelector("[data-testid=account]");
+  st = await saved();
+  const tomas = student(st, "Tomás Libre");
+  check("flexible", "'Sin día fijo' saves the student with no weekly slot", tomas && !st.slots.some((x) => x.student_id === tomas.id));
+  check("flexible", "their page doesn't ask for a day; it points to Agendar clase", (await text("[data-testid=upcoming-empty]")).includes("Agendar clase") && !(await text("[data-testid=student-classes]")).includes("Agregale un día") && await page.isVisible("[data-testid=no-fixed-day]"));
+  await page.tap("[data-testid=book-open]");
+  check("flexible", "Agendar clase starts on 50 min and on today (no class of theirs yet)", (await page.inputValue("[data-testid=book-minutes]")) === "50" && (await page.inputValue("[data-testid=book-date]")) === "7/10");
+  await page.fill("[data-testid=book-date]", "9/10");
+  await page.fill("[data-testid=book-start]", "15:30");
+  await page.tap("[data-testid=book-save]");
+  await page.waitForSelector("[data-testid=book-form] .notice-error");
+  check("flexible", "booking over another Clase is refused, naming who", (await text("[data-testid=book-form] .notice-error")).includes("Bruno Rodríguez") && !(await saved()).extras.some((x) => x.student_id === tomas.id));
+  await page.fill("[data-testid=book-start]", "10:00");
+  await page.tap("[data-testid=book-save]");
+  await page.waitForSelector("[data-testid=student-classes] .plain-list li");
+  st = await saved();
+  const booked = st.extras.filter((x) => x.student_id === tomas.id);
+  check("flexible", "the Clase is saved (Friday 10:00, 50 min) and listed under Próximas clases", booked.length === 1 && booked[0].date === "2026-10-09" && booked[0].start === "10:00" && booked[0].minutes === 50 && (await text("[data-testid=student-classes] .plain-list li >> nth=0")).startsWith("viernes 9 de octubre · 10:00"), JSON.stringify(booked));
+  await page.tap("[data-testid=book-open]");
+  check("flexible", "the suggested day is still the first without a Clase of theirs (today)", (await page.inputValue("[data-testid=book-date]")) === "7/10");
+  await page.fill("[data-testid=book-date]", "30/9");
+  await page.fill("[data-testid=book-start]", "10:00");
+  await page.tap("[data-testid=book-save]"); // one in the past weeks: it counts in her week from now on
+  await page.waitForTimeout(200);
+  check("flexible", "a past Clase can be booked too (catching up)", (await saved()).extras.filter((x) => x.student_id === tomas.id).length === 2);
+  await shot("03b-sin-dia-fijo");
+  await go("agenda");
+  check("flexible", "the booked Clase shows on the agenda", await clase("Tomás Libre", "viernes 9 de octubre").count() === 1);
+
   // ── F3 cancel / charge / undo / move / extra on the agenda ──
   await go("agenda");
   await clase("Bruno Rodríguez", "miércoles 7 de octubre").tap();
@@ -315,6 +355,7 @@ try {
   const p3 = m.projection({ students: 3, per_week: 2, hours: 1.5, rate: 1000 });
   readback.projection = { screen: await text("[data-testid=proj-extra-month]"), expected: p3.extra.per_month };
   check("projection", "3 students × 2 classes × 1½ h at $ 1.000 → the screen shows the registry's monthly extra", readback.projection.screen === `+ ${money(p3.extra.per_month)}` && (await text("[data-testid=proj-total-month]")) === money(p3.total.per_month), JSON.stringify(readback.projection));
+  check("projection", "'hoy' counts the student without a fixed day at their 4-week average, and says so", p3.base.flexible === 1 && (await text("[data-testid=proj-flexible]")).includes("uno sin día fijo"));
   check("projection", "the green 'nuevos' bar grows with it", await page.$eval(".seg-new", (el) => parseFloat(el.style.width) > 0));
   const perDay = await text("[data-testid=proj-per-day]");
   const fmt5 = (h) => { const m = Math.round((h * 60) / 5) * 5, hh = Math.floor(m / 60), mm = m % 60; return !hh ? `${mm} min` : mm === 30 ? `${hh}½ h` : mm ? `${hh} h ${mm}` : `${hh} h`; };
@@ -404,7 +445,7 @@ try {
   // ── F10 clear demo keeps real data ──
   st = await saved(); // the demo was cleared just above
   readback.afterClear = { students: st.students.map((s) => s.name), slots: st.slots.length, payments: st.payments.length };
-  check("clear-demo", "only demo students go; Valentina (with her slot) and Real Uno stay", JSON.stringify(readback.afterClear) === JSON.stringify({ students: ["Valentina Ríos", "Real Uno"], slots: 1, payments: 0 }), JSON.stringify(readback.afterClear));
+  check("clear-demo", "only demo students go; Valentina (with her slot), Tomás and Real Uno stay", JSON.stringify(readback.afterClear) === JSON.stringify({ students: ["Valentina Ríos", "Tomás Libre", "Real Uno"], slots: 1, payments: 0 }), JSON.stringify(readback.afterClear));
 
   // ── Offline ──
   await go("agenda");

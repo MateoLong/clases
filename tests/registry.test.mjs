@@ -368,6 +368,17 @@ test("students without a fixed day count in her week at their last-4-weeks avera
 });
 const round = (n) => Math.round(n * 100) / 100;
 
+test("a student without a fixed day can get one later, and lose it again, keeping their Clases", () => {
+  const flex = r.addStudent({ name: "Flexible", rate: 800 });
+  const k = r.addExtra(flex.id, { date: THU, start: "10:00", minutes: 50 });
+  const slot = r.addSlot(flex.id, { weekday: 5, start: "10:00", minutes: 50, from: WED });
+  assert.equal(r.classesBetween(MON, "2026-10-11").filter((c) => c.student_id === flex.id).length, 2); // Thursday's extra + Friday
+  r.endSlot(slot.id, "2026-10-10");
+  assert.deepEqual(r.classesBetween(MON, "2026-10-18").filter((c) => c.student_id === flex.id).map((c) => c.key), [k, `s${slot.id}-2026-10-09`]);
+  clock.date = "2026-10-12";
+  assert.equal(r.student(flex.id).slots.length, 0); // sin día fijo again
+});
+
 test("USD switch uses her rate and refuses nonsense", () => {
   r.updateSettings({ currency: "USD", usd_rate: "42,5" });
   assert.equal(r.convert(850, "UYU"), 20);
