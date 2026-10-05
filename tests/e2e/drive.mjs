@@ -213,6 +213,17 @@ try {
   check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8 de octubre").count() === 1, JSON.stringify(readback.extra));
   const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
   check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
+  // ── F3a a single Clase can't be double-booked ──
+  const extrasBefore = st.extras.length;
+  await page.tap("[data-testid=extra-toggle]");
+  await page.selectOption("[data-testid=extra-student]", { label: "Joaquín Pereira" });
+  await page.fill("[data-testid=extra-date]", "8/10");
+  await page.fill("[data-testid=extra-start]", "11:30");
+  await page.tap("[data-testid=extra-save]");
+  await page.waitForSelector("#extra-form .notice-error");
+  check("clash", "an extra class over another one is refused, naming who", (await text("#extra-form .notice-error")).includes("se superpone con Sofía González (11:00)") && (await saved()).extras.length === extrasBefore, await text("#extra-form .notice-error"));
+  await page.tap("[data-act=close-extra]");
+
   // ── F3b Planificación: written from the rail, kept on the device, shown on the label and the student page ──
   const moneyBeforePlan = (() => { const x = model(st); const w = x.week(); return JSON.stringify([w.earned, w.expected, w.total, x.owing()]); })();
   await clase("Bruno Rodríguez", "miércoles 7 de octubre").tap();

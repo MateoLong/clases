@@ -323,6 +323,14 @@ export class Registry {
     }
   }
 
+  /** A single Clase (extra or moved) can't overlap another Clase that day; a cancelled one leaves its time free. */
+  _checkClassClash({ date, start, minutes }, ignoreKey = null) {
+    const a = toMinutes(start), b = a + minutes;
+    const clash = this.classesBetween(date, date).find((c) => c.key !== ignoreKey && !c.cancelled
+      && toMinutes(c.start) < b && a < toMinutes(c.start) + c.minutes);
+    if (clash) throw new RegistryError("overlap", `Ese horario se superpone con ${clash.student} (${clash.start}).`, { key: clash.key });
+  }
+
   slot(id) {
     const s = this.state.slots.find((x) => x.id === Number(id));
     if (!s) throw new RegistryError("not_found", "No encontré ese horario.");
@@ -426,11 +434,13 @@ export class Registry {
       const ex = this.state.extras.find((e) => e.id === k.extra_id);
       if (!ex) throw new RegistryError("not_found", "No encontré esa clase.");
       const m = minutes == null ? ex.minutes : validMinutes(minutes);
+      this._checkClassClash({ date, start, minutes: m }, key);
       this._write((s) => Object.assign(s.extras.find((e) => e.id === ex.id), { date, start, minutes: m, cancelled: false }));
       return;
     }
     const slot = this._requireOccurrence(k);
     const m = minutes == null ? slot.minutes : validMinutes(minutes);
+    this._checkClassClash({ date, start, minutes: m }, `s${k.slot_id}-${k.date}`);
     this._write((s) => {
       s.changes = s.changes.filter((c) => !(c.slot_id === k.slot_id && c.date === k.date));
       s.changes.push({ id: this._id("change"), slot_id: k.slot_id, date: k.date, kind: "move", new_date: date, new_start: start, new_minutes: m });
@@ -442,6 +452,7 @@ export class Registry {
     date = validDate(date);
     start = validTime(start);
     minutes = validMinutes(minutes);
+    this._checkClassClash({ date, start, minutes });
     const id = this._write((s) => {
       const eid = this._id("extra");
       s.extras.push({ id: eid, student_id: st.id, date, start, minutes, cancelled: false, charge: false });
@@ -716,7 +727,7 @@ export class Registry {
     if (cs[0]) this.cancelClass(cs[0].key, { reason: "suspended" });
     if (cs[2]) this.cancelClass(cs[2].key, { reason: "missed" });
     if (cs[3]) this.moveClass(cs[3].key, { date: addDays(cs[3].date, 1), start: "19:00" });
-    this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "10:00", minutes: 90 });
+    this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "12:30", minutes: 90 }); // Saturday, after Lucía
     // payments: each month paid in its first days; two students have not paid last month yet
     const thisMonth = monthStart(today);
     for (const [i, id] of ids.entries()) {

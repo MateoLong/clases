@@ -61,6 +61,21 @@ test("two classes cannot overlap on the same day", () => {
   assert.ok(r.addSlot(emma.id, { weekday: 1, start: "18:00", minutes: 60 }));
 });
 
+test("a single Clase can't be double-booked; a cancelled one leaves its time free", () => {
+  // Joaquín: today 18:30–20:00
+  rejects(() => r.addExtra(emma.id, { date: WED, start: "19:00", minutes: 60 }), "overlap");
+  assert.throws(() => r.addExtra(emma.id, { date: WED, start: "18:00", minutes: 50 }), /Joaquín Pereira \(18:30\)/);
+  assert.ok(r.addExtra(emma.id, { date: WED, start: "17:30", minutes: 60 })); // ends 18:30 sharp
+  const mon = week()[0].key; // Martina, Monday 17:00
+  rejects(() => r.moveClass(mon, { date: WED, start: "18:30" }), "overlap");
+  rejects(() => r.moveClass(mon, { date: WED, start: "17:45" }), "overlap"); // onto the extra just added
+  assert.doesNotThrow(() => r.moveClass(mon, { date: MON, start: "17:30" })); // within its own time
+  const ex = r.addExtra(martina.id, { date: THU, start: "10:00", minutes: 60 });
+  assert.doesNotThrow(() => r.moveClass(ex, { date: THU, start: "10:30" })); // an extra moving over itself
+  r.cancelClass(week().find((c) => c.student_id === joaquin.id).key, { reason: "suspended" });
+  assert.ok(r.addExtra(emma.id, { date: WED, start: "19:00", minutes: 60 })); // his time is free now
+});
+
 test("cancel, charge anyway, restore", () => {
   const key = week()[0].key;
   r.cancelClass(key);

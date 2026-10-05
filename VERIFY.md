@@ -27,6 +27,5 @@ There are no PRs (solo project committed to `main`), so verdicts are recorded he
 - **Verifier nits left as they are:**
   - a slot ended after today's class cannot be taken by someone else until tomorrow;
   - changing a slot today to a time that has already passed counts as a class given;
-  - extra and moved classes are not checked for overlaps;
   - a moved class keeps its original date's Tarifa (by design, see GLOSSARY.md).
 - **Design ceiling, not done:** a deeper rework of Ganancias and ¿Y si…? in the forro/etiqueta language; debtor labels show both a colour dot and a colour frame.
