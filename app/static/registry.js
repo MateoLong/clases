@@ -18,6 +18,8 @@ function nextInk(students) {
 const WEEKS_PER_MONTH = 52 / 12;
 /** Hours per day are spread over a five-day week (all her classes, whatever day they fall on). */
 const WORKDAYS = 5;
+/** A student without a fixed day counts in her week at their average over this many full weeks. */
+const FLEX_WEEKS = 4;
 
 export class RegistryError extends Error {
   constructor(code, message, info = {}) {
@@ -625,7 +627,10 @@ export class Registry {
   }
 
   // ── projection ───────────────────────────────────────────────────────
-  /** What her current weekly slots bring in, per week and per month (her currency). */
+  /**
+   * What her week brings in, per week and per month (her currency): every weekly slot in
+   * force, plus each student without a fixed day at their average of the last 4 full weeks.
+   */
   baseline() {
     const today = this.today();
     let perWeek = 0, minutes = 0;
@@ -634,10 +639,18 @@ export class Registry {
       perWeek += this.convert((s.minutes / 60) * this.rateOn(st.id, today), st.currency);
       minutes += s.minutes;
     }
-    const students = new Set(this.activeSlots().map((s) => s.student_id)).size;
+    const fixed = new Set(this.activeSlots().map((s) => s.student_id));
+    const to = addDays(weekStart(today), -1), from = addDays(weekStart(today), -7 * FLEX_WEEKS);
+    const flexible = new Set();
+    for (const c of this.classesBetween(from, to)) {
+      if (c.cancelled || fixed.has(c.student_id) || this._requireStudent(c.student_id).archived) continue;
+      flexible.add(c.student_id);
+      perWeek += this.convert(c.amount, c.currency) / FLEX_WEEKS;
+      minutes += c.minutes / FLEX_WEEKS;
+    }
     const hours = minutes / 60;
-    return { students, per_week: round2(perWeek), per_month: round2(perWeek * WEEKS_PER_MONTH), hours_per_week: round2(hours),
-      hours_per_day: round2(hours / WORKDAYS), avg_rate: hours ? round2(perWeek / hours) : 0 };
+    return { students: fixed.size + flexible.size, flexible: flexible.size, per_week: round2(perWeek), per_month: round2(perWeek * WEEKS_PER_MONTH),
+      hours_per_week: round2(hours), hours_per_day: round2(hours / WORKDAYS), avg_rate: hours ? round2(perWeek / hours) : 0 };
   }
 
   /**

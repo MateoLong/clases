@@ -79,7 +79,7 @@ The "¿Y si…?" playground: her current Horarios fijos plus N new Alumnos, each
 _Avoid_: simulación, estimación
 
 **Horas por día**:
-All weekly class hours (current plus new Alumnos) divided over five weekdays, whatever day the classes fall on.
+All weekly class hours (current plus new Alumnos) divided over five weekdays, whatever day the classes fall on. An Alumno sin día fijo counts with their average of the last 4 full weeks.
 
 **Archivar**:
 To stop an Alumno's Clases from this moment on while keeping their history and what they owe.

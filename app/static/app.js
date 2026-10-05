@@ -760,7 +760,7 @@ function viewProyeccion() {
   }
   const maxRate = Math.max(cur() === "USD" ? 100 : 3000, Math.ceil((base.avg_rate * 2) / step) * step);
   main.innerHTML = `
-    <div class="page-head"><div><h1>¿Y si sumo alumnos?</h1><p>Jugá con los números y mirá cuánto cambia tu mes. Parte de tus clases fijas de hoy: ${plural(base.students, "alumno", "alumnos")}, ${fmtHours(base.hours_per_week)} por semana.</p></div></div>
+    <div class="page-head"><div><h1>¿Y si sumo alumnos?</h1><p>Jugá con los números y mirá cuánto cambia tu mes. Parte de tu semana de hoy: ${plural(base.students, "alumno", "alumnos")}, ${fmtHours(base.hours_per_week)} por semana${base.flexible ? ` <span data-testid="proj-flexible">(${base.flexible === 1 ? "uno sin día fijo cuenta" : `${base.flexible} sin día fijo cuentan`} con su promedio de las últimas 4 semanas)</span>` : ""}.</p></div></div>
     <div class="proj">
       <section class="panel proj-controls" aria-label="Alumnos nuevos">
         <div class="stepper-field">
@@ -784,7 +784,7 @@ function viewProyeccion() {
         </div>
         <label class="field"><span>Tarifa por hora <strong class="rate-out" data-testid="proj-rate-out">${money(proj.rate)}</strong></span>
           <input type="range" class="range" name="rate" min="0" max="${maxRate}" step="${step}" value="${proj.rate}" data-testid="proj-rate">
-          <small class="muted">${base.avg_rate ? `Hoy cobrás en promedio ${money(base.avg_rate)} la hora.` : "Todavía no hay clases fijas para comparar."}</small>
+          <small class="muted">${base.avg_rate ? `Hoy cobrás en promedio ${money(base.avg_rate)} la hora.` : "Todavía no hay clases para comparar."}</small>
         </label>
       </section>
       <section class="panel proj-result" aria-live="polite" data-testid="proj-result"></section>

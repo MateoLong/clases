@@ -348,6 +348,26 @@ test("dates show with the month's name unless she picks another style", () => {
   assert.equal(old.settings().date_style, "long");
 });
 
+test("students without a fixed day count in her week at their last-4-weeks average", () => {
+  const flex = r.addStudent({ name: "Flexible", rate: 800 });
+  // last 4 full weeks before this one: 7/9 … 4/10
+  r.addExtra(flex.id, { date: "2026-09-10", start: "10:00", minutes: 60 });
+  r.addExtra(flex.id, { date: "2026-09-22", start: "10:00", minutes: 60 });
+  const k = r.addExtra(flex.id, { date: "2026-10-01", start: "10:00", minutes: 60 });
+  r.addExtra(flex.id, { date: "2026-09-03", start: "10:00", minutes: 60 }); // too long ago
+  r.addExtra(flex.id, { date: THU, start: "10:00", minutes: 60 }); // this week: not a full week yet
+  r.addExtra(martina.id, { date: "2026-09-10", start: "12:00", minutes: 60 }); // has a fixed day: not added again
+  const b = r.baseline();
+  assert.deepEqual([b.students, b.flexible, b.hours_per_week, b.per_week], [4, 1, 3.5 + 0.75, 3600 + 600]);
+  assert.equal(b.hours_per_day, round(4.25 / 5));
+  r.cancelClass(k, { reason: "missed" }); // a missed one isn't time she spent
+  assert.equal(r.baseline().hours_per_week, 3.5 + 0.5);
+  assert.equal(r.projection({ students: 1, per_week: 1, hours: 1, rate: 800 }).total.hours_per_week, 3.5 + 0.5 + 1);
+  r.setArchived(flex.id, true);
+  assert.deepEqual([r.baseline().students, r.baseline().hours_per_week], [3, 3.5]);
+});
+const round = (n) => Math.round(n * 100) / 100;
+
 test("USD switch uses her rate and refuses nonsense", () => {
   r.updateSettings({ currency: "USD", usd_rate: "42,5" });
   assert.equal(r.convert(850, "UYU"), 20);
