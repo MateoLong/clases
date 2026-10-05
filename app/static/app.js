@@ -15,7 +15,9 @@ const DAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "
 const DAYS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const DURATIONS = [30, 45, 60, 75, 90, 120, 150, 180];
+const DURATIONS = [30, 45, 50, 60, 75, 90, 120, 150, 180];
+/** Her usual class: new classes and days start on it. */
+const DEFAULT_MINUTES = 50;
 
 const cur = () => reg.state.settings.currency;
 const fmt = (cy, digits) => new Intl.NumberFormat("es-UY", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -142,8 +144,11 @@ function actInForm(form, fn, message, { undo = true } = {}) {
   }
 }
 
-const durationSelect = (name, value = 60, testid = "") =>
-  `<select class="input" name="${name}" ${testid ? `data-testid="${testid}"` : ""}>${DURATIONS.map((m) => `<option value="${m}" ${m === Number(value) ? "selected" : ""}>${fmtDuration(m)}</option>`).join("")}</select>`;
+/** A length picker; a length not in the list (a class saved as 40 min) is kept as an option, so nothing changes by accident. */
+const durationSelect = (name, value = DEFAULT_MINUTES, testid = "") => {
+  const list = DURATIONS.includes(Number(value)) ? DURATIONS : [...DURATIONS, Number(value)].sort((x, y) => x - y);
+  return `<select class="input" name="${name}" ${testid ? `data-testid="${testid}"` : ""}>${list.map((m) => `<option value="${m}" ${m === Number(value) ? "selected" : ""}>${fmtDuration(m)}</option>`).join("")}</select>`;
+};
 const weekdaySelect = (name, value = 1, testid = "") =>
   `<select class="input" name="${name}" ${testid ? `data-testid="${testid}"` : ""}>${DAYS.map((d, i) => `<option value="${i + 1}" ${i + 1 === Number(value) ? "selected" : ""}>${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select>`;
 
@@ -270,6 +275,7 @@ function selectedPanel(c) {
         <label class="field"><span>Día</span><input class="input" name="date" value="${fmtDM(c.date)}" inputmode="numeric" placeholder="17/10"></label>
         <label class="field"><span>Hora</span><input class="input" name="start" value="${c.start}" inputmode="numeric" placeholder="17:30"></label>
       </div>
+      <label class="field"><span>Duración</span>${durationSelect("minutes", c.minutes, "move-minutes")}</label>
       <div class="form-msg"></div>
       <button class="btn btn-go btn-sm" type="submit">Mover la clase</button>
     </form>
@@ -290,7 +296,7 @@ function wireSelected(c, params) {
     e.preventDefault();
     const date = parseDM(form.date.value);
     if (!date) { $(".form-msg", form).innerHTML = `<div class="notice notice-error" role="alert">No entendí el día. Escribilo como 17/10.</div>`; return; }
-    actInForm(form, () => reg.moveClass(c.key, { date, start: form.start.value }), `Movida al ${fmtDayLong(date)} a las ${form.start.value.trim()}.`);
+    actInForm(form, () => reg.moveClass(c.key, { date, start: form.start.value, minutes: form.minutes.value }), `Movida al ${fmtDayLong(date)} a las ${form.start.value.trim()}.`);
     if (date < weekStart(reg.today()) || date > addDays(weekStart(params.get("semana") || reg.today()), 6)) location.hash = `#/agenda?semana=${weekStart(date)}`;
   });
 }
@@ -336,7 +342,7 @@ function extraForm(students, day) {
       <label class="field"><span>Día</span><input class="input" name="date" value="${fmtDM(day)}" inputmode="numeric" placeholder="17/10" data-testid="extra-date"></label>
       <label class="field"><span>Hora</span><input class="input" name="start" value="" inputmode="numeric" placeholder="17:30" data-testid="extra-start"></label>
     </div>
-    <label class="field"><span>Duración</span>${durationSelect("minutes", 60)}</label>
+    <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "extra-minutes")}</label>
     <div class="form-msg"></div>
     <div class="row"><button class="btn btn-go btn-sm" type="submit" data-testid="extra-save">${icon("check")}Agregar</button>
       <button class="btn btn-quiet btn-sm" type="button" data-act="close-extra">Cancelar</button></div>
@@ -409,7 +415,7 @@ function viewAlumnos(params) {
       <div class="grid-slot">
         <label class="field"><span>Día</span><select class="input" name="weekday" data-testid="new-weekday"><option value="">Sin día fijo</option>${DAYS.map((d, i) => `<option value="${i + 1}">${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select></label>
         <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:00" data-testid="new-start"></label>
-        <label class="field"><span>Duración</span>${durationSelect("minutes", 60, "new-minutes")}</label>
+        <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "new-minutes")}</label>
       </div>
       <div class="form-msg"></div>
       <div class="row"><button class="btn btn-go" type="submit" data-testid="new-save">${icon("check")}Guardar</button><button class="btn btn-quiet" type="button" id="add-cancel">Cancelar</button></div>
@@ -500,7 +506,7 @@ function viewAlumno(id) {
           <div class="grid-slot">
             <label class="field"><span>Día</span>${weekdaySelect("weekday", 1, "slot-weekday")}</label>
             <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:00" data-testid="slot-start"></label>
-            <label class="field"><span>Duración</span>${durationSelect("minutes", 60)}</label>
+            <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "slot-minutes")}</label>
           </div>
           <div class="form-msg"></div>
           <button class="btn btn-line btn-sm" type="submit" data-testid="slot-save">${icon("plus")}Agregar día</button>
@@ -702,7 +708,7 @@ let resizeT;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => chartResize?.(), 150); });
 
 // ══ ¿Y SI…? ════════════════════════════════════════════════════════════
-const proj = { students: 2, per_week: 1, minutes: 60, rate: null };
+const proj = { students: 2, per_week: 1, minutes: DEFAULT_MINUTES, rate: null };
 
 function viewProyeccion() {
   const base = reg.baseline();
@@ -733,7 +739,7 @@ function viewProyeccion() {
           </div>
         </div>
         <div class="field"><span>Duración de cada clase</span>
-          <div class="chips" role="group" aria-label="Duración">${[45, 60, 90, 120].map((m) => `<button type="button" class="chip" data-min="${m}" aria-pressed="${proj.minutes === m}">${fmtDuration(m)}</button>`).join("")}</div>
+          <div class="chips" role="group" aria-label="Duración">${[45, 50, 60, 90, 120].map((m) => `<button type="button" class="chip" data-min="${m}" aria-pressed="${proj.minutes === m}">${fmtDuration(m)}</button>`).join("")}</div>
         </div>
         <label class="field"><span>Tarifa por hora <strong class="rate-out" data-testid="proj-rate-out">${money(proj.rate)}</strong></span>
           <input type="range" class="range" name="rate" min="0" max="${maxRate}" step="${step}" value="${proj.rate}" data-testid="proj-rate">

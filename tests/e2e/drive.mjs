@@ -105,6 +105,7 @@ try {
   // ── F2 add a student with a weekly slot ──
   await go("alumnos");
   await page.tap("[data-testid=add-student-toggle]");
+  check("fifty", "a new student's weekly class starts on 50 min", (await page.inputValue("[data-testid=new-minutes]")) === "50");
   await page.fill("[data-testid=new-name]", "Valentina Ríos");
   await page.fill("[data-testid=new-rate]", "1.000");
   await page.selectOption("[data-testid=new-weekday]", "2");
@@ -117,6 +118,7 @@ try {
   const valeSlot = st.slots.find((s) => s.student_id === vale?.id);
   readback.newStudent = { rate: st.rates.find((r) => r.student_id === vale?.id)?.amount, slot: valeSlot && { weekday: valeSlot.weekday, start: valeSlot.start, minutes: valeSlot.minutes, from: valeSlot.from } };
   check("students", "new student saved with '1.000' as 1000 an hour and a Tuesday 10:00, 1½ h slot from today", vale && readback.newStudent.rate === 1000 && valeSlot?.weekday === 2 && valeSlot.start === "10:00" && valeSlot.minutes === 90 && valeSlot.from === NOW.date, JSON.stringify(readback.newStudent));
+  check("fifty", "'Agregar un día' starts on 50 min", (await page.inputValue("[data-testid=slot-minutes]")) === "50");
   await page.fill("[data-testid=slot-start]", "17:30");
   await page.selectOption("[data-testid=slot-weekday]", "4");
   await page.tap("[data-testid=slot-save]");
@@ -157,6 +159,7 @@ try {
   await clase("Lucía Fernández", "sábado 10/10").tap();
   await page.waitForSelector("[data-testid=selected-class]");
   await page.tap("[data-testid=move-open]");
+  check("fifty", "Mover keeps the class's own length (Lucía's 2 h)", (await page.inputValue("[data-testid=move-minutes]")) === "120");
   await page.fill("[data-testid=move-form] [name=date]", "9/10");
   await page.fill("[data-testid=move-form] [name=start]", "18:00");
   await page.tap("[data-testid=move-form] button[type=submit]");
@@ -173,12 +176,15 @@ try {
   await page.selectOption("[data-testid=extra-student]", { label: "Sofía González" });
   await page.fill("[data-testid=extra-date]", "8/10");
   await page.fill("[data-testid=extra-start]", "11:00");
+  check("fifty", "a Clase extra starts on 50 min", (await page.inputValue("[data-testid=extra-minutes]")) === "50");
   await page.tap("[data-testid=extra-save]");
   await page.waitForTimeout(250);
   st = await saved();
   const sofia = student(st, "Sofía González");
   readback.extra = st.extras.filter((e) => e.student_id === sofia.id && e.date === "2026-10-08");
   check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8/10").count() === 1, JSON.stringify(readback.extra));
+  const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
+  check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8/10").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
   await shot("05-agenda-cambios");
 
   // ── F4 Cobrar with the stamp; then undo ──
@@ -234,6 +240,7 @@ try {
 
   // ── F7 ¿Y si…? ──
   await go("proyeccion");
+  check("fifty", "¿Y si…? opens on 50-minute classes", (await page.getAttribute('[data-min="50"]', "aria-pressed")) === "true");
   await page.tap('[data-step="students:1"]');
   await page.tap('[data-step="per_week:1"]');
   await page.tap('[data-min="90"]');

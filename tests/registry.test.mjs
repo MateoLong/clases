@@ -94,6 +94,15 @@ test("an extra class counts like any other", () => {
   assert.deepEqual([ex.status, ex.amount], ["given", 1200]);
 });
 
+test("a 50-minute class is charged 50/60 of the hourly rate", () => {
+  const key = r.addExtra(joaquin.id, { date: THU, start: "10:00", minutes: 50 }); // $ 1.200 an hour
+  const c = r.classesBetween(THU, THU).find((x) => x.key === key);
+  assert.deepEqual([c.minutes, c.amount], [50, 1000]);
+  const odd = r.addStudent({ name: "Odd", rate: 800 });
+  const k2 = r.addExtra(odd.id, { date: THU, start: "12:00", minutes: 50 });
+  assert.equal(r.classesBetween(THU, THU).find((x) => x.key === k2).amount, 666.67); // rounded to cents
+});
+
 // ── rates & slots over time ──
 test("a raise applies from its date; past classes keep the old rate", () => {
   r.setRate(martina.id, 1000, THU);
