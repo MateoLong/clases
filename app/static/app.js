@@ -510,6 +510,24 @@ function nextFreeDay(studentId) {
   return d;
 }
 
+/** The parts of a student's page, in the order of the chips under the name. */
+const SECTIONS = [["sec-account", "Cuenta"], ["sec-slots", "Días de clase"], ["sec-rate", "Tarifa"], ["edit-form", "Datos"], ["sec-classes", "Próximas clases"]];
+
+/**
+ * Scroll a part of the page to just under the sticky band (the hash is the route, so no #anchors),
+ * move focus to its heading and outline it for a moment: side by side in landscape, it may barely move.
+ */
+function jumpTo(id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  const band = $(".band")?.getBoundingClientRect().height || 0;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - band - 16, behavior: still ? "auto" : "smooth" });
+  target.querySelector("h2, h3")?.focus({ preventScroll: true });
+  target.classList.add("is-target");
+  setTimeout(() => target.classList.remove("is-target"), 1200);
+}
+
 /** A Clase's Planificación under its line in the student's lists. */
 const planLine = (c) => (c.plan ? `<p class="plan-line" data-testid="plan-line">${icon("pencil")}<span>${esc(c.plan)}</span></p>` : "");
 
@@ -532,10 +550,13 @@ function viewAlumno(id) {
         <button type="button" class="btn btn-quiet ${s.archived ? "" : "btn-danger"}" data-act="archive">${icon("archive")}${s.archived ? "Reactivar" : "Archivar"}</button>
       </div>
     </div>
+    <nav class="chips section-jump" aria-label="Ir a una parte de la ficha" data-testid="section-jump">
+      ${SECTIONS.map(([id, label]) => `<button type="button" class="chip" data-jump="${id}">${label}</button>`).join("")}
+    </nav>
 
     <div class="detail-grid">
-      <section class="panel account" data-testid="account">
-        <h2>Cuenta</h2>
+      <section class="panel account" id="sec-account" data-testid="account">
+        <h2 tabindex="-1">Cuenta</h2>
         <p class="hero-figure ${s.owes > 0.004 ? "is-owed" : s.credit > 0.004 ? "is-credit" : ""}" data-testid="student-owes">${s.owes > 0.004 ? moneyIn(s.owes, s.currency) : s.credit > 0.004 ? moneyIn(s.credit, s.currency) : "Al día"}</p>
         <p class="muted">${s.owes > 0.004 ? "te debe" : s.credit > 0.004 ? "tiene a favor (va para el mes que viene)" : "no te debe nada"}${s.currency !== cur() && (s.owes > 0.004 || s.credit > 0.004) ? ` · ${shown(Math.abs(s.owes), s.currency)}` : ""}</p>
         <dl class="stats" data-testid="this-month">
@@ -557,8 +578,8 @@ function viewAlumno(id) {
             <button type="button" class="btn btn-quiet btn-sm" data-unpay="${p.id}" aria-label="Borrar el pago de ${moneyIn(p.amount, p.currency)} del ${fmtDM(p.date)}">${icon("x")}</button></li>`).join("")}</ul>` : ""}
       </section>
 
-      <section class="panel" data-testid="slots">
-        <h2>Días de clase</h2>
+      <section class="panel" id="sec-slots" data-testid="slots">
+        <h2 tabindex="-1">Días de clase</h2>
         ${s.slots.length ? `<ul class="plain-list">${s.slots.map((sl) => `<li class="slot-row" data-slot="${sl.id}">
             <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}${slotDates(sl) ? `<span class="muted">${slotDates(sl)}</span>` : ""}</span>
             <span class="row"><button type="button" class="btn btn-quiet btn-sm" data-edit-slot="${sl.id}">${icon("pencil")}Cambiar</button>
@@ -585,8 +606,8 @@ function viewAlumno(id) {
         </form>`}
       </section>
 
-      <section class="panel" data-testid="rate">
-        <h2>Tarifa</h2>
+      <section class="panel" id="sec-rate" data-testid="rate">
+        <h2 tabindex="-1">Tarifa</h2>
         <p><strong>${moneyIn(s.rate, s.currency)}</strong> ${s.rate_per === "hour" ? "por hora (cada clase según lo que dura)" : "por clase, dure lo que dure"}${rateHist ? `<br><span class="muted">${rateHist}</span>` : ""}</p>
         <form id="rate-form" class="inline-form" novalidate>
           <div class="row-2">
@@ -598,7 +619,7 @@ function viewAlumno(id) {
           <button class="btn btn-line btn-sm" type="submit" data-testid="rate-save">Cambiar tarifa</button>
         </form>
         <form id="edit-form" class="inline-form" novalidate>
-          <h3 class="sub-h">Datos</h3>
+          <h3 class="sub-h" tabindex="-1">Datos</h3>
           <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(s.name)}"></label>
           ${schoolInputs(s, "edit")}
           <label class="field"><span>Notas</span><textarea class="input paste" name="notes" rows="2" placeholder="Materia, teléfono de la mamá…">${esc(s.notes)}</textarea></label>
@@ -607,8 +628,8 @@ function viewAlumno(id) {
         </form>
       </section>
 
-      <section class="panel" data-testid="student-classes">
-        <div class="panel-head"><h2>Próximas clases</h2>
+      <section class="panel" id="sec-classes" data-testid="student-classes">
+        <div class="panel-head"><h2 tabindex="-1">Próximas clases</h2>
           ${s.archived ? "" : `<button type="button" class="btn ${s.slots.length ? "btn-line" : "btn-go"} btn-sm" data-act="book-open" aria-expanded="false" data-testid="book-open">${icon("calendar-plus")}Agendar clase</button>`}</div>
         ${s.archived ? "" : `<form id="book-form" class="inline-form" hidden novalidate data-testid="book-form">
           <div class="grid-slot">
@@ -659,6 +680,7 @@ function viewAlumno(id) {
     const f = e.target;
     actInForm(f, () => reg.addSlot(s.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value }), "Día agregado.");
   });
+  $$("[data-jump]").forEach((b) => b.addEventListener("click", () => jumpTo(b.dataset.jump)));
   $("#rate-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = e.target;

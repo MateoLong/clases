@@ -326,6 +326,18 @@ try {
   m = model(st);
   check("rate", "a raise from 12/10 leaves this week at the old rate", m.rateOn(martina.id, "2026-10-08").amount === 700 && m.rateOn(martina.id, "2026-10-12").amount === 950);
   check("rate", "her page says the Tarifa is per Clase", (await text("[data-testid=rate]")).includes("por clase, dure lo que dure"));
+  // ── section chips under the name ──
+  const route = await page.evaluate(() => location.hash);
+  check("jump", "the student page has a chip for each part, in order", (await page.$$eval("[data-testid=section-jump] .chip", (bs) => bs.map((b) => b.textContent))).join("|") === "Cuenta|Días de clase|Tarifa|Datos|Próximas clases");
+  await page.tap("[data-testid=section-jump] [data-jump=sec-rate]");
+  await page.waitForTimeout(900);
+  readback.jump = await page.evaluate(() => ({ top: Math.round(document.getElementById("sec-rate").getBoundingClientRect().top), band: Math.round(document.querySelector(".band").getBoundingClientRect().height), focus: document.activeElement?.textContent, outlined: document.getElementById("sec-rate").classList.contains("is-target"), hash: location.hash }));
+  check("jump", "Tarifa lands just under the band, focused and outlined, and the route stays", readback.jump.top >= readback.jump.band && readback.jump.top <= readback.jump.band + 30 && readback.jump.focus === "Tarifa" && readback.jump.outlined && readback.jump.hash === route, JSON.stringify(readback.jump));
+  await page.tap("[data-testid=section-jump] [data-jump=edit-form]");
+  await page.waitForTimeout(900);
+  check("jump", "Datos focuses its heading inside the Tarifa panel", await page.evaluate(() => document.activeElement?.textContent === "Datos" && document.getElementById("edit-form").getBoundingClientRect().top >= document.querySelector(".band").getBoundingClientRect().height));
+  await page.waitForTimeout(1300);
+  check("jump", "the outline goes away after a moment", await page.evaluate(() => !document.querySelector(".is-target")));
   await page.waitForSelector("[data-testid=this-month]");
   const cu = m.cuota(martina.id);
   readback.cuota = { screen: [await text("[data-testid=cuota-total]"), await text("[data-testid=cuota-paid]"), await text("[data-testid=cuota-left]")], model: [cu.total, cu.paid, cu.left, cu.credit] };
