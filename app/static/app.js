@@ -525,7 +525,9 @@ function viewAlumno(id) {
   const recent = reg.classesBetween(addDays(today, -56), today).filter((c) => c.student_id === s.id && c.status !== "scheduled").reverse();
   const pays = reg.payments(s.id);
   const cuota = reg.cuota(s.id);
-  const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)}${r.per === "hour" ? " por hora" : ""} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
+  // every Tarifa, newest first; all but the first can be deleted
+  const rateList = s.rates.length > 1 ? `<h3 class="sub-h">Tarifas</h3><ul class="plain-list" data-testid="rates">${s.rates.map((r, i) => `<li class="pay-row"><span>${r.from <= "2000-01-01" ? "Al principio" : `Desde el ${fmtDM(r.from)}`}</span><strong>${moneyIn(r.amount, s.currency)}${r.per === "hour" ? " por hora" : ""}</strong>
+      ${i < s.rates.length - 1 ? `<button type="button" class="btn btn-quiet btn-sm" data-unrate="${r.id}" aria-label="Borrar la tarifa de ${moneyIn(r.amount, s.currency)} desde el ${fmtDM(r.from)}">${icon("x")}</button>` : "<span></span>"}</li>`).join("")}</ul>` : "";
   if (openPart.id !== s.id) openPart = { id: s.id, part: "account" };
   const part = openPart.part;
   main.innerHTML = `
@@ -607,7 +609,7 @@ function viewAlumno(id) {
 
       <section class="panel" id="part-rate" ${part === "rate" ? "" : "hidden"} data-testid="rate">
         <h2>Tarifa</h2>
-        <p><strong>${moneyIn(s.rate, s.currency)}</strong> ${s.rate_per === "hour" ? "por hora (cada clase según lo que dura)" : "por clase, dure lo que dure"}${rateHist ? `<br><span class="muted">${rateHist}</span>` : ""}</p>
+        <p><strong>${moneyIn(s.rate, s.currency)}</strong> ${s.rate_per === "hour" ? "por hora (cada clase según lo que dura)" : "por clase, dure lo que dure"}</p>
         <form id="rate-form" class="inline-form" novalidate>
           <div class="row-2">
             <label class="field"><span>Nueva tarifa por clase</span><input class="input" name="rate" inputmode="decimal" placeholder="${s.rate_per === "hour" ? "" : s.rate}" data-testid="rate-new"></label>
@@ -617,6 +619,7 @@ function viewAlumno(id) {
           <div class="form-msg"></div>
           <button class="btn btn-line btn-sm" type="submit" data-testid="rate-save">Cambiar tarifa</button>
         </form>
+        ${rateList}
       </section>
 
       <section class="panel" id="part-classes" ${part === "classes" ? "" : "hidden"} data-testid="student-classes">
@@ -658,6 +661,8 @@ function viewAlumno(id) {
     actInForm(pay, () => reg.addPayment(s.id, { amount: pay.amount.value, date }), (p) => `Pago registrado: ${moneyIn(p.amount, p.currency)}.`);
   });
   $$("[data-unpay]").forEach((b) => b.addEventListener("click", () => act(() => reg.removePayment(b.dataset.unpay), "Pago borrado.")));
+  $$("[data-unrate]").forEach((b) => b.addEventListener("click", () => act(() => reg.removeRate(b.dataset.unrate),
+    (r) => `Tarifa borrada. Desde el ${fmtDM(r.from)} vuelve a ser ${moneyIn(r.amount, s.currency)}${r.per === "hour" ? " por hora" : ""}.`)));
   $$("[data-edit-slot]").forEach((b) => b.addEventListener("click", () => { const f = $(`[data-slot-form="${b.dataset.editSlot}"]`); f.hidden = !f.hidden; }));
   $$("[data-slot-form]").forEach((f) => f.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1023,7 +1028,7 @@ function viewAyuda() {
         "Para agendarle una clase a cualquiera (sobre todo a los que no tienen día fijo), en su ficha abrí <strong>Próximas clases</strong> y tocá <strong>Agendar clase</strong>: día, hora y cuánto dura.",
         "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Para cambiarlos, o el nombre y las notas, tocá el <strong>lápiz</strong> al lado de su nombre. Tocando el mail se abre Mail para escribirle.",
         "En su ficha, abajo del nombre, elegís qué ver: <strong>Cuenta</strong>, <strong>Días de clase</strong> (agregar otro día, cambiarlo o quitarlo), <strong>Tarifa</strong> o <strong>Próximas clases</strong>.",
-        "Para subirle la tarifa, en <strong>Tarifa</strong> usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",
+        "Para subirle la tarifa, en <strong>Tarifa</strong> usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja. ¿Te equivocaste? Borrala con la <strong>✕</strong> en la lista de tarifas.",
         "Si deja de venir, <strong>Archivar</strong> quita sus clases que vienen. Lo que te debe y su historial quedan.",
       ], ["#/alumnos", "Ir a Alumnos"])}
       ${card("ganancias", "chart-column", "Ganancias, ¿Y si…? y dólares", [

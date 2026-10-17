@@ -244,6 +244,19 @@ export class Registry {
     return this.student(id);
   }
 
+  /**
+   * Delete a Tarifa typed by mistake: its dates go back to the Tarifa before it. The first one
+   * can't go, or the Clases before the next one would cost nothing. Returns what rules from its date now.
+   */
+  removeRate(id) {
+    const rate = this.state.rates.find((r) => r.id === Number(id));
+    if (!rate) throw new RegistryError("not_found", "No encontré esa tarifa.");
+    const first = this.state.rates.filter((r) => r.student_id === rate.student_id).sort((a, b) => (a.from < b.from ? -1 : 1))[0];
+    if (first.id === rate.id) throw new RegistryError("invalid", "La primera tarifa no se puede borrar. Para cambiarla, agregá una nueva desde una fecha.");
+    this._write((s) => { s.rates = s.rates.filter((r) => r.id !== rate.id); });
+    return { from: rate.from, ...this.rateOn(rate.student_id, rate.from) };
+  }
+
   /** The Tarifa in force on a date: { amount, per: "class" | "hour" }. */
   rateOn(studentId, date) {
     const rates = this.state.rates.filter((r) => r.student_id === Number(studentId) && r.from <= date).sort((a, b) => (a.from < b.from ? 1 : -1));

@@ -351,6 +351,20 @@ try {
   await page.tap("[data-part=account]");
   readback.parts = await page.evaluate(() => ({ shown: [...document.querySelectorAll(".detail-parts > section")].filter((x) => !x.hidden).map((x) => x.dataset.testid), hash: location.hash }));
   check("parts", "Cuenta closes Tarifa, only one part shows, and the route stays", JSON.stringify(readback.parts.shown) === '["account"]' && readback.parts.hash === route, JSON.stringify(readback.parts));
+  // ── deleting a Tarifa typed by mistake ──
+  await page.tap("[data-part=rate]");
+  readback.rates = await page.$$eval("[data-testid=rates] li", (lis) => lis.map((li) => [li.querySelector("span").textContent, Boolean(li.querySelector("[data-unrate]"))]));
+  check("unrate", "the Tarifas are listed newest first, each with a ✕ but the first", JSON.stringify(readback.rates) === JSON.stringify([["Desde el 12 de octubre", true], ["Desde el 24 de agosto", true], ["Al principio", false]]), JSON.stringify(readback.rates));
+  await shot("07b-tarifas");
+  await page.tap("[data-testid=rates] li >> nth=0 >> [data-unrate]");
+  await page.waitForTimeout(200);
+  let un = model(await saved());
+  check("unrate", "✕ deletes it: from 12/10 she is back at $ 700 a class, saved", un.rateOn(martina.id, "2026-10-12").amount === 700 && !(await saved()).rates.some((r) => r.amount === 950) && un.classesBetween("2026-10-12", "2026-10-12").find((c) => c.student_id === martina.id).amount === 700);
+  check("unrate", "…the toast says what rules now, and Tarifa stays open", (await text(".toast >> nth=-1")).includes("Desde el 12 de octubre vuelve a ser $ 700") && await page.isVisible("[data-testid=rate]"), await text(".toast >> nth=-1"));
+  await page.tap(".toast >> nth=-1 >> [data-undo]");
+  await page.waitForTimeout(200);
+  check("unrate", "Deshacer brings the raise back", model(await saved()).rateOn(martina.id, "2026-10-12").amount === 950);
+  await page.tap("[data-part=account]");
   await page.waitForSelector("[data-testid=this-month]");
   const cu = m.cuota(martina.id);
   readback.cuota = { screen: [await text("[data-testid=cuota-total]"), await text("[data-testid=cuota-paid]"), await text("[data-testid=cuota-left]")], model: [cu.total, cu.paid, cu.left, cu.credit] };

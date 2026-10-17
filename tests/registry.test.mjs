@@ -147,6 +147,18 @@ test("a Clase costs the Tarifa whatever its length", () => {
   assert.deepEqual([r.student(joaquin.id).rate, r.student(joaquin.id).rate_per], [1200, "class"]);
 });
 
+test("a Tarifa typed by mistake can be deleted; the first one can't", () => {
+  r.setRate(martina.id, 1000, "2026-10-12");
+  const typo = r.setRate(martina.id, 9000, "2026-10-19").rates[0];
+  assert.equal(r.classesBetween("2026-10-19", "2026-10-19")[0].amount, 9000);
+  assert.deepEqual(r.removeRate(typo.id), { from: "2026-10-19", amount: 1000, per: "class" });
+  assert.deepEqual(r.classesBetween("2026-10-12", "2026-10-26").filter((c) => c.student_id === martina.id).map((c) => c.amount), [1000, 1000, 1000]);
+  const [, first] = r.student(martina.id).rates;
+  rejects(() => r.removeRate(first.id), "invalid");
+  rejects(() => r.removeRate(999), "not_found");
+  assert.equal(r.week().earned, 800 + 25 * 40); // this week never moved
+});
+
 test("a Tarifa saved per hour keeps pricing its Clases by length; a new one is per Clase (ADR 0007)", () => {
   const old = structuredClone(r.state);
   for (const x of old.rates) delete x.per; // saved before Tarifas were per Clase
