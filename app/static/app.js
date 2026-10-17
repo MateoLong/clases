@@ -440,6 +440,8 @@ const slotDates = (s) => {
   return `${s.from > today ? ` desde el ${fmtDM(s.from)}` : ""}${s.to ? ` hasta el ${fmtDM(s.to)}` : ""}`;
 };
 const slotText = (s) => `${DAYS_SHORT[s.weekday - 1]} ${s.start}${slotDates(s)}`;
+/** A Tarifa is per Clase; one saved before that (ADR 0007) is per hour. */
+const ratePer = (per) => (per === "hour" ? "por hora" : "por clase");
 
 function viewAlumnos(params) {
   const showArchived = params.get("archivados") === "1";
@@ -452,7 +454,7 @@ function viewAlumnos(params) {
       <h2>Alumno nuevo</h2>
       <div class="grid-student">
         <label class="field"><span>Nombre</span><input class="input" name="name" data-testid="new-name"></label>
-        <label class="field"><span>Tarifa por hora</span><input class="input" name="rate" inputmode="decimal" placeholder="800" data-testid="new-rate"></label>
+        <label class="field"><span>Tarifa por clase</span><input class="input" name="rate" inputmode="decimal" placeholder="700" data-testid="new-rate"></label>
         <fieldset class="field seg-field"><legend>Moneda</legend><div class="seg">
           <label><input type="radio" name="currency" value="UYU" checked><span>$ UYU</span></label>
           <label><input type="radio" name="currency" value="USD"><span>US$ USD</span></label></div></fieldset>
@@ -472,7 +474,7 @@ function viewAlumnos(params) {
           ${avatar(s, 44)}
           <span class="student-main"><strong>${esc(s.name)}</strong>${s.archived ? ' <span class="pill pill-off">Archivado</span>' : ""}
             <span class="muted">${s.grade ? `${s.grade}º · ` : ""}${s.slots.length ? s.slots.map(slotText).join(" · ") : "Sin día fijo"}</span></span>
-          <span class="student-rate">${moneyIn(s.rate, s.currency)}<small>por hora</small></span>
+          <span class="student-rate">${moneyIn(s.rate, s.currency)}<small>${ratePer(s.rate_per)}</small></span>
           <span class="student-owes">${s.owes > 0.004 ? `<span class="pill pill-late">Debe ${moneyIn(s.owes, s.currency)}</span>` : s.credit > 0.004 ? `<span class="pill pill-ok">A favor ${moneyIn(s.credit, s.currency)}</span>` : `<span class="pill pill-ok">Al día</span>`}</span>
         </a></li>`).join("")}</ul>`
       : `<div class="empty-state"><h3>Todavía no hay alumnos</h3><p>Agregá el primero con el botón amarillo: nombre, tarifa y su día de clase.</p></div>`}
@@ -518,13 +520,13 @@ function viewAlumno(id) {
   const recent = reg.classesBetween(addDays(today, -56), today).filter((c) => c.student_id === s.id && c.status !== "scheduled").reverse();
   const pays = reg.payments(s.id);
   const cuota = reg.cuota(s.id);
-  const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
+  const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)}${r.per === "hour" ? " por hora" : ""} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
   main.innerHTML = `
     <a class="back" href="#/alumnos">${icon("chevron-left")}Alumnos</a>
     <div class="detail-head">
       ${avatar(s, 84)}
       <div><h1>${esc(s.name)}</h1>
-        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> por hora</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
+        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> ${ratePer(s.rate_per)}</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
         ${s.school || s.grade || s.teacher || s.teacher_email ? `<p class="school-line" data-testid="school-line">${[s.school && esc(s.school), gradeText(s.grade)].filter(Boolean).join(" · ")}${s.teacher || s.teacher_email ? `${s.school || s.grade ? "<br>" : ""}Maestra/o: ${esc(s.teacher || "")}${s.teacher_email ? ` <a href="mailto:${esc(s.teacher_email)}" data-testid="teacher-mail">${icon("mail")}${esc(s.teacher_email)}</a>` : ""}` : ""}</p>` : ""}</div>
       <div class="btn-col">
         <button type="button" class="btn btn-quiet ${s.archived ? "" : "btn-danger"}" data-act="archive">${icon("archive")}${s.archived ? "Reactivar" : "Archivar"}</button>
@@ -585,10 +587,10 @@ function viewAlumno(id) {
 
       <section class="panel" data-testid="rate">
         <h2>Tarifa</h2>
-        <p><strong>${moneyIn(s.rate, s.currency)}</strong> por hora${rateHist ? `<br><span class="muted">${rateHist}</span>` : ""}</p>
+        <p><strong>${moneyIn(s.rate, s.currency)}</strong> ${s.rate_per === "hour" ? "por hora (cada clase según lo que dura)" : "por clase, dure lo que dure"}${rateHist ? `<br><span class="muted">${rateHist}</span>` : ""}</p>
         <form id="rate-form" class="inline-form" novalidate>
           <div class="row-2">
-            <label class="field"><span>Nueva tarifa por hora</span><input class="input" name="rate" inputmode="decimal" placeholder="${s.rate}" data-testid="rate-new"></label>
+            <label class="field"><span>Nueva tarifa por clase</span><input class="input" name="rate" inputmode="decimal" placeholder="${s.rate_per === "hour" ? "" : s.rate}" data-testid="rate-new"></label>
             <label class="field"><span>Desde</span><input class="input" name="from" inputmode="numeric" value="${fmtTyped(today)}" data-testid="rate-from"></label>
           </div>
           <small class="muted">Las clases de antes de esa fecha se siguen cobrando a la tarifa vieja.</small>
@@ -807,10 +809,10 @@ function viewProyeccion() {
   const base = reg.baseline();
   const step = cur() === "USD" ? 1 : 50;
   if (proj.rate == null || proj.currency !== cur()) {
-    proj.rate = Math.round((base.avg_rate || (cur() === "USD" ? 20 : 800)) / step) * step;
+    proj.rate = Math.round((base.avg_price || (cur() === "USD" ? 20 : 700)) / step) * step;
     proj.currency = cur();
   }
-  const maxRate = Math.max(cur() === "USD" ? 100 : 3000, Math.ceil((base.avg_rate * 2) / step) * step);
+  const maxRate = Math.max(cur() === "USD" ? 100 : 3000, Math.ceil((base.avg_price * 2) / step) * step);
   main.innerHTML = `
     <div class="page-head"><div><h1>¿Y si sumo alumnos?</h1><p>Jugá con los números y mirá cuánto cambia tu mes. Parte de tu semana de hoy: ${plural(base.students, "alumno", "alumnos")}, ${fmtHours(base.hours_per_week)} por semana${base.flexible ? ` <span data-testid="proj-flexible">(${base.flexible === 1 ? "uno sin día fijo cuenta" : `${base.flexible} sin día fijo cuentan`} con su promedio de las últimas 4 semanas)</span>` : ""}.</p></div></div>
     <div class="proj">
@@ -832,17 +834,18 @@ function viewProyeccion() {
           </div>
         </div>
         <div class="field"><span>Duración de cada clase</span>
-          <div class="chips" role="group" aria-label="Duración">${[45, 50, 60, 90, 120].map((m) => `<button type="button" class="chip" data-min="${m}" aria-pressed="${proj.minutes === m}">${fmtDuration(m)}</button>`).join("")}</div>
+          <div class="chips" role="group" aria-label="Duración">${[50, 60, 90].map((m) => `<button type="button" class="chip" data-min="${m}" aria-pressed="${proj.minutes === m}">${fmtDuration(m)}</button>`).join("")}</div>
+          <small class="muted">Cambia las horas, no la plata: cada clase cuesta la tarifa.</small>
         </div>
-        <label class="field"><span>Tarifa por hora <strong class="rate-out" data-testid="proj-rate-out">${money(proj.rate)}</strong></span>
+        <label class="field"><span>Tarifa por clase <strong class="rate-out" data-testid="proj-rate-out">${money(proj.rate)}</strong></span>
           <input type="range" class="range" name="rate" min="0" max="${maxRate}" step="${step}" value="${proj.rate}" data-testid="proj-rate">
-          <small class="muted">${base.avg_rate ? `Hoy cobrás en promedio ${money(base.avg_rate)} la hora.` : "Todavía no hay clases para comparar."}</small>
+          <small class="muted">${base.avg_price ? `Hoy cobrás en promedio ${money(base.avg_price)} la clase.` : "Todavía no hay clases para comparar."}</small>
         </label>
       </section>
       <section class="panel proj-result" aria-live="polite" data-testid="proj-result"></section>
     </div>`;
   const paint = () => {
-    const p = reg.projection({ students: proj.students, per_week: proj.per_week, hours: proj.minutes / 60, rate: proj.rate });
+    const p = reg.projection({ students: proj.students, per_week: proj.per_week, minutes: proj.minutes, rate: proj.rate });
     const max = Math.max(p.total.per_month, 1);
     $("[data-testid=proj-students]").textContent = proj.students;
     $("[data-testid=proj-perweek]").textContent = proj.per_week;
@@ -994,7 +997,7 @@ function viewAyuda() {
         "¿Anotaste mal un pago? Borralo con la <strong>✕</strong> en la lista de pagos de su ficha.",
       ])}
       ${card("alumnos", "user-plus", "Alumnos y tarifas", [
-        "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por hora (en pesos o dólares) y su día y hora de clase. Si viene cuando puede, dejá <strong>Sin día fijo</strong>.",
+        "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por clase (en pesos o dólares; una clase cuesta lo mismo dure 50 minutos o una hora) y su día y hora de clase. Si viene cuando puede, dejá <strong>Sin día fijo</strong>.",
         "Para agendarle una clase a cualquiera (sobre todo a los que no tienen día fijo), en su ficha tocá <strong>Agendar clase</strong>: día, hora y cuánto dura.",
         "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Tocando el mail se abre Mail para escribirle.",
         "En su ficha podés agregar otro día, cambiarlo o quitarlo.",

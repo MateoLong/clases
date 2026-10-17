@@ -46,7 +46,7 @@ test("weekly slots fill the week; passed classes are given, the rest scheduled",
     [TUE, "16:00", "Emma Acosta", "given"],
     [WED, "18:30", "Joaquín Pereira", "scheduled"],
   ]);
-  assert.deepEqual(cs.map((c) => [c.amount, c.currency]), [[800, "UYU"], [25, "USD"], [1800, "UYU"]]);
+  assert.deepEqual(cs.map((c) => [c.amount, c.currency]), [[800, "UYU"], [25, "USD"], [1200, "UYU"]]);
 });
 
 test("a class becomes 'given' once it ends, not when it starts", () => {
@@ -92,7 +92,7 @@ test("Faltó is charged, La suspendo yo is not, and either can be put back", () 
   r.cancelClass(wed.key, { reason: "missed" }); // Joaquín won't come today
   const j = week().find((c) => c.key === wed.key);
   assert.deepEqual([j.status, j.reason, j.billable], ["cancelled", "missed", true]);
-  assert.equal(r.week().total, 3600); // still counts
+  assert.equal(r.week().total, 3000); // still counts
   r.cancelClass(mon.key, { reason: "suspended" });
   const m = week()[0];
   assert.deepEqual([m.reason, m.billable], ["suspended", false]);
@@ -123,7 +123,7 @@ test("a moved class shows on its new day and keeps its original rate", () => {
   r.moveClass(key, { date: THU, start: "10:00" });
   const cs = week();
   const moved = cs.find((c) => c.key === key);
-  assert.deepEqual([moved.date, moved.start, moved.moved_from, moved.amount], [THU, "10:00", WED, 1800]);
+  assert.deepEqual([moved.date, moved.start, moved.moved_from, moved.amount], [THU, "10:00", WED, 1200]);
   assert.equal(cs.filter((c) => c.student_id === joaquin.id).length, 1);
 });
 
@@ -136,16 +136,28 @@ test("a class moved into next week appears there, not here", () => {
 test("an extra class counts like any other", () => {
   const key = r.addExtra(martina.id, { date: TUE, start: "10:00", minutes: 90 });
   const ex = week().find((c) => c.key === key);
-  assert.deepEqual([ex.status, ex.amount], ["given", 1200]);
+  assert.deepEqual([ex.status, ex.amount], ["given", 800]);
 });
 
-test("a 50-minute class is charged 50/60 of the hourly rate", () => {
-  const key = r.addExtra(joaquin.id, { date: THU, start: "10:00", minutes: 50 }); // $ 1.200 an hour
-  const c = r.classesBetween(THU, THU).find((x) => x.key === key);
-  assert.deepEqual([c.minutes, c.amount], [50, 1000]);
-  const odd = r.addStudent({ name: "Odd", rate: 800 });
-  const k2 = r.addExtra(odd.id, { date: THU, start: "12:00", minutes: 50 });
-  assert.equal(r.classesBetween(THU, THU).find((x) => x.key === k2).amount, 666.67); // rounded to cents
+test("a Clase costs the Tarifa whatever its length", () => {
+  const short = r.addExtra(joaquin.id, { date: THU, start: "10:00", minutes: 50 });
+  const long = r.addExtra(joaquin.id, { date: THU, start: "12:00", minutes: 60 });
+  const cs = r.classesBetween(THU, THU);
+  assert.deepEqual([short, long].map((k) => cs.find((x) => x.key === k).amount), [1200, 1200]);
+  assert.deepEqual([r.student(joaquin.id).rate, r.student(joaquin.id).rate_per], [1200, "class"]);
+});
+
+test("a Tarifa saved per hour keeps pricing its Clases by length; a new one is per Clase (ADR 0007)", () => {
+  const old = structuredClone(r.state);
+  for (const x of old.rates) delete x.per; // saved before Tarifas were per Clase
+  const r2 = new Registry(old, { now: () => clock });
+  const sept = r2.months(1, 0)[0].earned;
+  assert.equal(sept, 4 * 800 + 5 * 25 * 40 + 5 * 1800); // Joaquín's 1½ h at 1.200 an hour, as before
+  assert.equal(r2.student(joaquin.id).rate_per, "hour");
+  r2.setRate(joaquin.id, 1300, THU);
+  assert.deepEqual([r2.rateOn(joaquin.id, THU), r2.classesBetween("2026-10-14", "2026-10-14")[0].amount], [{ amount: 1300, per: "class" }, 1300]);
+  assert.equal(r2.months(1, 0)[0].earned, sept); // September doesn't move
+  assert.equal(r2.exportTable("students").rows.find((x) => x[0] === "Joaquín Pereira")[2], "hora"); // until Thursday
 });
 
 test("school details: optional, checked, editable, exported", () => {
@@ -259,7 +271,7 @@ test("archiving cancels what was booked after it, so reactivating doesn't bring 
   r.setArchived(martina.id, false);
   const ex = r.classesBetween("2026-10-14", "2026-10-14").find((c) => c.student_id === martina.id);
   assert.ok(!ex || (ex.cancelled && !ex.billable));
-  assert.equal(r.period("2026-10-12", "2026-10-18").earned, 25 * 40 + 1800); // Emma + Joaquín only
+  assert.equal(r.period("2026-10-12", "2026-10-18").earned, 25 * 40 + 1200); // Emma + Joaquín only
 });
 
 test("a student whose weekly day just ended isn't counted as flexible at those old hours", () => {
@@ -305,12 +317,12 @@ test("removing, changing or archiving from today keeps a class already given tod
   const given = r.balance(joaquin.id).earned_total;
   const earned = r.week().earned;
   const snap = r.state;
-  const rest = 3 * 1800; // Wednesdays 14, 21, 28: what leaves October's Cuota when the slot stops
+  const rest = 3 * 1200; // Wednesdays 14, 21, 28: what leaves October's Cuota when the slot stops
   r.endSlot(slot.id);
-  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 1800]); // only tonight's class stays in October
+  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 1200]); // only tonight's class stays in October
   r.replaceState(snap);
   r.changeSlot(slot.id, { start: "21:00" });
-  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 4 * 1800]);
+  assert.deepEqual([r.balance(joaquin.id).earned_total, r.week().earned, r.cuota(joaquin.id).total], [given, earned, 4 * 1200]);
   assert.equal(week().filter((c) => c.student_id === joaquin.id).length, 1); // not a second class tonight
   r.replaceState(snap);
   const owes = r.balance(joaquin.id).owes;
@@ -328,7 +340,7 @@ test("archiving also stops extra and moved classes still to come", () => {
 test("a slot changed from a future date counts once, and frees its old time only from then", () => {
   const slot = r.student(joaquin.id).slots[0];
   r.changeSlot(slot.id, { weekday: 4, start: "18:30", from: "2026-10-12" });
-  assert.equal(r.baseline().per_week, 3600); // not doubled
+  assert.equal(r.baseline().per_week, 3000); // not doubled
   assert.equal(r.baseline().hours_per_week, 3.5);
   // Wednesday 18:30 is still Joaquín's until then, free after
   rejects(() => r.addSlot(emma.id, { weekday: 3, start: "18:30", minutes: 60, from: WED }), "overlap");
@@ -418,16 +430,16 @@ test("the Cuota follows the agenda: extras add, a raise prices by date, Ganado d
 
 test("the week: earned so far, still to come, total, hours", () => {
   const w = r.week();
-  assert.deepEqual([w.earned, w.expected, w.total, w.hours, w.classes], [800 + 25 * 40, 1800, 3600, 3.5, 3]);
+  assert.deepEqual([w.earned, w.expected, w.total, w.hours, w.classes], [800 + 25 * 40, 1200, 3000, 3.5, 3]);
   r.updateSettings({ currency: "USD" });
-  assert.deepEqual([r.week().earned, r.week().expected], [45, 45]);
+  assert.deepEqual([r.week().earned, r.week().expected], [45, 30]);
 });
 
 test("months add up to the classes in them", () => {
   const ms = r.months(1, 0); // September and October
   assert.deepEqual(ms.map((m) => m.month), ["2026-09", "2026-10"]);
   // September: Mondays 7,14,21,28 · Tuesdays 1,8,15,22,29 · Wednesdays 2,9,16,23,30
-  assert.equal(ms[0].earned, 4 * 800 + 5 * 25 * 40 + 5 * 1800);
+  assert.equal(ms[0].earned, 4 * 800 + 5 * 25 * 40 + 5 * 1200);
   assert.equal(ms[0].expected, 0);
   // October: given = Mon 5 + Tue 6; expected = Wed 7 … end of month
   assert.equal(ms[1].earned, 800 + 1000);
@@ -440,11 +452,15 @@ test("per-student month ranking", () => {
 
 test("projection: today's weekly slots plus N new students", () => {
   const base = r.baseline();
-  assert.deepEqual([base.students, base.per_week, base.hours_per_week], [3, 800 + 1000 + 1800, 3.5]);
-  const p = r.projection({ students: 2, per_week: 2, hours: 1, rate: 900 });
-  assert.deepEqual([p.extra.hours_per_week, p.extra.per_week, p.total.hours_per_week, p.total.students], [4, 3600, 7.5, 5]);
-  assert.equal(p.extra.per_month, Math.round(3600 * 52 / 12 * 100) / 100);
+  assert.deepEqual([base.students, base.per_week, base.hours_per_week], [3, 800 + 1000 + 1200, 3.5]);
+  assert.equal(base.avg_price, 1000); // 3.000 over 3 Clases a week
+  const p = r.projection({ students: 2, per_week: 2, minutes: 60, rate: 750 });
+  assert.deepEqual([p.extra.hours_per_week, p.extra.per_week, p.total.hours_per_week, p.total.students], [4, 3000, 7.5, 5]);
+  assert.equal(p.extra.per_month, Math.round(3000 * 52 / 12 * 100) / 100);
   assert.equal(p.growth, 100);
+  // the length changes her hours, not the money: each Clase is the Tarifa
+  const short = r.projection({ students: 2, per_week: 2, minutes: 50, rate: 750 });
+  assert.deepEqual([short.extra.per_week, short.extra.hours_per_week], [3000, round(200 / 60)]);
   // hours per day over a 5-day week, counting every student: today 3.5 h / 5, with them 7.5 h / 5
   assert.deepEqual([base.hours_per_day, p.total.hours_per_day], [0.7, 1.5]);
   assert.equal(r.projection({ students: 0, rate: 900 }).extra.per_week, 0);
@@ -470,11 +486,11 @@ test("students without a fixed day count in her week at their last-4-weeks avera
   r.addExtra(flex.id, { date: THU, start: "10:00", minutes: 60 }); // this week: not a full week yet
   r.addExtra(martina.id, { date: "2026-09-10", start: "12:00", minutes: 60 }); // has a fixed day: not added again
   const b = r.baseline();
-  assert.deepEqual([b.students, b.flexible, b.hours_per_week, b.per_week], [4, 1, 3.5 + 0.75, 3600 + 600]);
+  assert.deepEqual([b.students, b.flexible, b.hours_per_week, b.per_week], [4, 1, 3.5 + 0.75, 3000 + 600]);
   assert.equal(b.hours_per_day, round(4.25 / 5));
   r.cancelClass(k, { reason: "missed" }); // a missed one isn't time she spent
   assert.equal(r.baseline().hours_per_week, 3.5 + 0.5);
-  assert.equal(r.projection({ students: 1, per_week: 1, hours: 1, rate: 800 }).total.hours_per_week, 3.5 + 0.5 + 1);
+  assert.equal(r.projection({ students: 1, per_week: 1, minutes: 60, rate: 800 }).total.hours_per_week, 3.5 + 0.5 + 1);
   r.setArchived(flex.id, true);
   assert.deepEqual([r.baseline().students, r.baseline().hours_per_week], [3, 3.5]);
 });

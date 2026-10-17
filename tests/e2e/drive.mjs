@@ -139,7 +139,7 @@ try {
   await go(`alumnos/${vale.id}`);
   const valeSlot = st.slots.find((s) => s.student_id === vale?.id);
   readback.newStudent = { rate: st.rates.find((r) => r.student_id === vale?.id)?.amount, slot: valeSlot && { weekday: valeSlot.weekday, start: valeSlot.start, minutes: valeSlot.minutes, from: valeSlot.from } };
-  check("students", "new student saved with '1.000' as 1000 an hour and a Tuesday 10:00, 1½ h slot from today", vale && readback.newStudent.rate === 1000 && valeSlot?.weekday === 2 && valeSlot.start === "10:00" && valeSlot.minutes === 90 && valeSlot.from === NOW.date, JSON.stringify(readback.newStudent));
+  check("students", "new student saved with '1.000' as 1000 a class and a Tuesday 10:00, 1½ h slot from today", vale && readback.newStudent.rate === 1000 && valeSlot?.weekday === 2 && valeSlot.start === "10:00" && valeSlot.minutes === 90 && valeSlot.from === NOW.date, JSON.stringify(readback.newStudent));
   check("fifty", "'Agregar un día' starts on 50 min", (await page.inputValue("[data-testid=slot-minutes]")) === "50");
   await page.fill("[data-testid=slot-start]", "17:30");
   await page.selectOption("[data-testid=slot-weekday]", "4");
@@ -204,7 +204,7 @@ try {
   const cancel = st.changes.find((c) => c.slot_id === brunoWedSlot.id && c.date === NOW.date);
   check("cancel", "'La suspendo yo' saves a suspension, not charged", cancel?.kind === "cancel" && cancel.charge === false && cancel.reason === "suspended", JSON.stringify(cancel));
   check("cancel", "…and the label reads 'suspendida'", (await clase("Bruno Rodríguez", "miércoles 7 de octubre").getAttribute("aria-label")).includes("suspendida"));
-  check("cancel", "the week's expected money drops by that class", model(st).week().expected === before.expected - 750, `${before.expected} → ${model(st).week().expected}`);
+  check("cancel", "the week's expected money drops by that class", model(st).week().expected === before.expected - 650, `${before.expected} → ${model(st).week().expected}`);
   await page.tap(".toast .btn");
   await page.waitForTimeout(200);
   check("cancel", "Deshacer brings the class back", !(await saved()).changes.some((c) => c.slot_id === brunoWedSlot.id && c.date === NOW.date));
@@ -252,7 +252,7 @@ try {
   readback.extra = st.extras.filter((e) => e.student_id === sofia.id && e.date === "2026-10-08");
   check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8 de octubre").count() === 1, JSON.stringify(readback.extra));
   const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
-  check("fifty", "…50 min, charged 50/60 of her hourly rate, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === Math.round((50 / 60) * 850 * 100) / 100 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
+  check("fifty", "…50 min, charged her whole per-class Tarifa, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === 750 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));
   // ── F3a a single Clase can't be double-booked ──
   const extrasBefore = st.extras.length;
   await page.tap("[data-testid=extra-toggle]");
@@ -324,7 +324,8 @@ try {
   await page.waitForTimeout(200);
   st = await saved();
   m = model(st);
-  check("rate", "a raise from 12/10 leaves this week at the old rate", m.rateOn(martina.id, "2026-10-08") === 800 && m.rateOn(martina.id, "2026-10-12") === 950);
+  check("rate", "a raise from 12/10 leaves this week at the old rate", m.rateOn(martina.id, "2026-10-08").amount === 700 && m.rateOn(martina.id, "2026-10-12").amount === 950);
+  check("rate", "her page says the Tarifa is per Clase", (await text("[data-testid=rate]")).includes("por clase, dure lo que dure"));
   await page.waitForSelector("[data-testid=this-month]");
   const cu = m.cuota(martina.id);
   readback.cuota = { screen: [await text("[data-testid=cuota-total]"), await text("[data-testid=cuota-paid]"), await text("[data-testid=cuota-left]")], model: [cu.total, cu.paid, cu.left, cu.credit] };
@@ -357,9 +358,9 @@ try {
   await page.tap('[data-min="90"]');
   await page.$eval("[data-testid=proj-rate]", (el) => { el.value = "1000"; el.dispatchEvent(new Event("input", { bubbles: true })); });
   m = model(await saved());
-  const p3 = m.projection({ students: 3, per_week: 2, hours: 1.5, rate: 1000 });
+  const p3 = m.projection({ students: 3, per_week: 2, minutes: 90, rate: 1000 });
   readback.projection = { screen: await text("[data-testid=proj-extra-month]"), expected: p3.extra.per_month };
-  check("projection", "3 students × 2 classes × 1½ h at $ 1.000 → the screen shows the registry's monthly extra", readback.projection.screen === `+ ${money(p3.extra.per_month)}` && (await text("[data-testid=proj-total-month]")) === money(p3.total.per_month), JSON.stringify(readback.projection));
+  check("projection", "3 students × 2 classes of 1½ h at $ 1.000 a class → the screen shows the registry's monthly extra", readback.projection.screen === `+ ${money(p3.extra.per_month)}` && (await text("[data-testid=proj-total-month]")) === money(p3.total.per_month), JSON.stringify(readback.projection));
   check("projection", "'hoy' counts the student without a fixed day at their 4-week average, and says so", p3.base.flexible === 1 && (await text("[data-testid=proj-flexible]")).includes("uno sin día fijo"));
   check("projection", "the green 'nuevos' bar grows with it", await page.$eval(".seg-new", (el) => parseFloat(el.style.width) > 0));
   const perDay = await text("[data-testid=proj-per-day]");

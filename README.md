@@ -1,17 +1,17 @@
 # Mis clases
 
-Agenda de clases particulares: quién viene cuándo, cuánto cobra cada uno por hora, cuánto ganaste por semana y por mes, quién te debe, y un simulador de "¿y si sumo alumnos?". Hecho para el **iPad** (Safari), funciona sin internet y los datos quedan solo en ese iPad. Hermana de [Biblioteca](https://github.com/MateoLong/biblioteca): mismo aspecto.
+Agenda de clases particulares: quién viene cuándo, cuánto cobra cada uno por clase, cuánto ganaste por semana y por mes, quién te debe, y un simulador de "¿y si sumo alumnos?". Hecho para el **iPad** (Safari), funciona sin internet y los datos quedan solo en ese iPad. Hermana de [Biblioteca](https://github.com/MateoLong/biblioteca): mismo aspecto.
 
 ## Para usarla en el iPad
 
 1. Abrí la dirección en **Safari** → **Compartir** → **Agregar a pantalla de inicio**.
 2. Abrila siempre desde el ícono "Mis clases". Funciona aunque no haya Wi-Fi.
-3. La primera vez: probá con **datos de ejemplo**, o agregá tus alumnos en **Alumnos** (nombre, tarifa por hora, día y hora de su clase).
+3. La primera vez: probá con **datos de ejemplo**, o agregá tus alumnos en **Alumnos** (nombre, tarifa por clase, día y hora de su clase).
 
 - **Agenda**: la semana con cada clase como una etiqueta. Tocá una para marcar que **faltó** (se cobra igual), **suspenderla** vos (no se cobra), moverla, escribir su **planificación** o ver la ficha. A la derecha: lo ganado, lo que falta, **quién te debe** (cada mes se debe entero desde el 1º; el botón Cobrar anota el pago) y **Clase extra**.
-- **Alumnos**: tarifa (los aumentos rigen desde una fecha; lo anterior no cambia), días de clase (o **sin día fijo**, con **Agendar clase**), colegio, año y maestra/o, pagos y la cuota del mes de cada uno.
+- **Alumnos**: tarifa por clase, dure 50 minutos o una hora (los aumentos rigen desde una fecha; lo anterior no cambia), días de clase (o **sin día fijo**, con **Agendar clase**), colegio, año y maestra/o, pagos y la cuota del mes de cada uno.
 - **Ganancias**: por mes y por semana (lo ganado y lo agendado), y este mes por alumno.
-- **¿Y si…?**: elegí cuántos alumnos nuevos, cuántas clases por semana, cuánto duran y a qué tarifa, y mirá cuánto ganarías por mes y por año.
+- **¿Y si…?**: elegí cuántos alumnos nuevos, cuántas clases por semana, cuánto duran (cambia las horas, no la plata) y a qué tarifa por clase, y mirá cuánto ganarías por mes y por año.
 - **Arriba a la derecha**: UYU / USD. La cotización se escribe en **Ajustes**.
 
 Todo se guarda solo en el iPad: una vez por semana, **Ajustes → Guardar copia de seguridad** (la app lo recuerda).

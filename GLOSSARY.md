@@ -13,7 +13,7 @@ Where an Alumno goes to school, the school year they are in (1º to 6º) and the
 _Avoid_: clase or grado (for the Año: a Clase is a sitting), profesor (for the Maestra/o: she is the tutor)
 
 **Tarifa**:
-What an Alumno pays per hour, in force from a date on. A new Tarifa never changes Clases before its date.
+What an Alumno pays per Clase, whatever its length (most are 50 minutes, some an hour), in force from a date on. A new Tarifa never changes Clases before its date. A Tarifa saved before 2026-10-17 was per hour and still prices its Clases by length (ADR 0007).
 _Avoid_: precio, valor hora
 
 **Cotización**:

@@ -1,4 +1,4 @@
-// Mis clases: students, their weekly slots and hourly rates, the classes that come out of
+// Mis clases: students, their weekly slots and per-class rates, the classes that come out of
 // them, payments, and the money maths. Pure logic: runs in the browser (saved on the iPad)
 // and in Node for the tests. The whole state is one plain object, so a backup is its JSON.
 
@@ -197,14 +197,14 @@ export class Registry {
   addStudent({ name, rate, currency = "UYU", notes = "", from = null, demo = false, ...more } = {}) {
     name = String(name || "").trim();
     if (!name) throw new RegistryError("invalid", "Falta el nombre.");
-    const amount = validAmount(rate, "La tarifa por hora");
+    const amount = validAmount(rate, "La tarifa por clase");
     currency = validCurrency(currency);
     const school = { ...NO_SCHOOL, ...schoolFields(more) };
     const since = from ? validDate(from) : "2000-01-01";
     const id = this._write((s) => {
       const sid = this._id("student");
       s.students.push({ id: sid, name, currency, ink: nextInk(s.students), notes: String(notes || "").trim(), ...school, archived: false, is_demo: demo, created_at: nowStamp() });
-      s.rates.push({ id: this._id("rate"), student_id: sid, amount, from: since });
+      s.rates.push({ id: this._id("rate"), student_id: sid, amount, per: "class", from: since });
       return sid;
     });
     return this.student(id);
@@ -232,21 +232,28 @@ export class Registry {
     return this.student(id);
   }
 
-  /** New hourly rate from a date on; classes before that date keep the old rate. */
+  /** New per-class rate from a date on; classes before that date keep the old rate. */
   setRate(id, amount, from = this.today()) {
     const st = this._requireStudent(id);
-    amount = validAmount(amount, "La tarifa por hora");
+    amount = validAmount(amount, "La tarifa por clase");
     from = validDate(from, "desde cuándo rige la tarifa");
     this._write((s) => {
       s.rates = s.rates.filter((r) => !(r.student_id === st.id && r.from === from));
-      s.rates.push({ id: this._id("rate"), student_id: st.id, amount, from });
+      s.rates.push({ id: this._id("rate"), student_id: st.id, amount, per: "class", from });
     });
     return this.student(id);
   }
 
+  /** The Tarifa in force on a date: { amount, per: "class" | "hour" }. */
   rateOn(studentId, date) {
     const rates = this.state.rates.filter((r) => r.student_id === Number(studentId) && r.from <= date).sort((a, b) => (a.from < b.from ? 1 : -1));
-    return rates[0]?.amount ?? 0;
+    return rates[0] ? { amount: rates[0].amount, per: rates[0].per } : { amount: 0, per: "class" };
+  }
+
+  /** What one Clase of `minutes` costs at the Tarifa of `date`. A Tarifa saved before 2026-10-17 is per hour (ADR 0007). */
+  _price(studentId, date, minutes) {
+    const r = this.rateOn(studentId, date);
+    return round2(r.per === "hour" ? (minutes / 60) * r.amount : r.amount);
   }
 
   /**
@@ -285,7 +292,7 @@ export class Registry {
   student(id) {
     const st = { ...this._requireStudent(id) };
     const today = this.today();
-    st.rate = this.rateOn(st.id, today);
+    ({ amount: st.rate, per: st.rate_per } = this.rateOn(st.id, today));
     st.rates = this.state.rates.filter((r) => r.student_id === st.id).sort((a, b) => (a.from < b.from ? 1 : -1));
     // current and upcoming slots (a change "from next Monday" shows both, with their dates)
     st.slots = this.state.slots.filter((s) => s.student_id === st.id && (!s.to || s.to >= today))
@@ -551,7 +558,7 @@ export class Registry {
       const done = `${o.date} ${end}` <= nowKey;
       const status = o.cancelled ? "cancelled" : done ? "given" : "scheduled";
       const st = this.state.students.find((x) => x.id === o.student_id);
-      const amount = round2((o.minutes / 60) * this.rateOn(o.student_id, o.rate_date || o.date));
+      const amount = this._price(o.student_id, o.rate_date || o.date, o.minutes);
       // cancels saved before reasons existed: a charged one was a Faltó, an uncharged one a suspension
       const reason = o.cancelled ? o.reason || (o.charge ? "missed" : "suspended") : null;
       out.push({ ...o, reason, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "" });
@@ -709,11 +716,12 @@ export class Registry {
    */
   baseline() {
     const today = this.today();
-    let perWeek = 0, minutes = 0;
+    let perWeek = 0, minutes = 0, classes = 0;
     for (const s of this.activeSlots()) {
       const st = this._requireStudent(s.student_id);
-      perWeek += this.convert((s.minutes / 60) * this.rateOn(st.id, today), st.currency);
+      perWeek += this.convert(this._price(st.id, today, s.minutes), st.currency);
       minutes += s.minutes;
+      classes += 1;
     }
     const fixed = new Set(this.activeSlots().map((s) => s.student_id));
     const to = addDays(weekStart(today), -1), from = addDays(weekStart(today), -7 * FLEX_WEEKS);
@@ -723,21 +731,23 @@ export class Registry {
       flexible.add(c.student_id);
       perWeek += this.convert(c.amount, c.currency) / FLEX_WEEKS;
       minutes += c.minutes / FLEX_WEEKS;
+      classes += 1 / FLEX_WEEKS;
     }
     const hours = minutes / 60;
     return { students: fixed.size + flexible.size, flexible: flexible.size, per_week: round2(perWeek), per_month: round2(perWeek * WEEKS_PER_MONTH),
-      hours_per_week: round2(hours), hours_per_day: round2(hours / WORKDAYS), avg_rate: hours ? round2(perWeek / hours) : 0 };
+      hours_per_week: round2(hours), hours_per_day: round2(hours / WORKDAYS), avg_price: classes ? round2(perWeek / classes) : 0 };
   }
 
   /**
-   * "¿Y si sumo alumnos?": n new students, each `perWeek` classes of `hours` at `rate`
-   * (rate in her current currency). Returns the baseline, the extra and the new total.
+   * "¿Y si sumo alumnos?": n new students, each `per_week` classes of `minutes` at `rate` per
+   * Clase (in her current currency). Returns the baseline, the extra and the new total.
    */
-  projection({ students = 0, per_week = 1, hours = 1, rate = 0 } = {}) {
+  projection({ students = 0, per_week = 1, minutes = 50, rate = 0 } = {}) {
     const base = this.baseline();
     const n = Math.max(0, Math.round(Number(students) || 0));
-    const extraHours = n * Math.max(0, Number(per_week) || 0) * Math.max(0, Number(hours) || 0);
-    const extraWeek = round2(extraHours * Math.max(0, Number(rate) || 0));
+    const extraClasses = n * Math.max(0, Number(per_week) || 0);
+    const extraHours = (extraClasses * Math.max(0, Number(minutes) || 0)) / 60;
+    const extraWeek = round2(extraClasses * Math.max(0, Number(rate) || 0));
     return {
       base,
       extra: { students: n, hours_per_week: round2(extraHours), per_week: extraWeek, per_month: round2(extraWeek * WEEKS_PER_MONTH), per_year: round2(extraWeek * 52) },
@@ -774,9 +784,9 @@ export class Registry {
         rows: this.payments().map((p) => [p.date, p.student, p.amount, p.currency, p.note]) };
     }
     if (kind === "students") {
-      return { name: "Alumnos", columns: [["Nombre", 26], ["Tarifa por hora", 15], ["Moneda", 8], ["Horas por semana", 16], ["Debe", 11], [`Debe (${cur})`, 13],
+      return { name: "Alumnos", columns: [["Nombre", 26], ["Tarifa", 11], ["Por", 7], ["Moneda", 8], ["Horas por semana", 16], ["Debe", 11], [`Debe (${cur})`, 13],
         ["Colegio", 24], ["Año", 6], ["Maestra/o", 22], ["Mail de la maestra/o", 28]],
-        rows: this.students(true).map((s) => [s.name, s.rate, s.currency, round2(s.weekly_minutes / 60), s.owes, round2(this.convert(s.owes, s.currency)),
+        rows: this.students(true).map((s) => [s.name, s.rate, s.rate_per === "hour" ? "hora" : "clase", s.currency, round2(s.weekly_minutes / 60), s.owes, round2(this.convert(s.owes, s.currency)),
           s.school, s.grade ? `${s.grade}º` : "", s.teacher, s.teacher_email]) };
     }
     throw new RegistryError("invalid", "Tipo de planilla desconocido.");
@@ -816,7 +826,7 @@ export class Registry {
     if (cs[0]) this.cancelClass(cs[0].key, { reason: "suspended" });
     if (cs[2]) this.cancelClass(cs[2].key, { reason: "missed" });
     if (cs[3]) this.moveClass(cs[3].key, { date: addDays(cs[3].date, 1), start: "19:00" });
-    this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "12:30", minutes: 90 }); // Saturday, after Lucía
+    this.addExtra(ids[0], { date: addDays(lastWeek, 5), start: "12:30", minutes: 60 }); // Saturday, after Lucía
     // payments: each month's Cuota paid in its first days; one student hasn't paid this month yet
     const thisMonth = monthStart(today);
     for (const [i, id] of ids.entries()) {
@@ -853,5 +863,7 @@ function migrate(state) {
   // students saved before colours were stored get one now, in the order they were added
   const done = [];
   out.students = (out.students || []).map((st) => { const s2 = { ...NO_SCHOOL, ...(st.ink ? st : { ...st, ink: nextInk(done) }) }; done.push(s2); return s2; });
+  // Tarifas saved before they were per Clase were per hour, and keep pricing their Clases by length (ADR 0007)
+  out.rates = (out.rates || []).map((r) => (r.per ? r : { ...r, per: "hour" }));
   return out;
 }

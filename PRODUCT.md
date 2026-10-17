@@ -18,7 +18,7 @@ The owner's mother, a school librarian who also gives private classes to a handf
 
 ## Product Purpose
 
-Keep her private-class agenda and money in one place: who comes when, what each one pays per hour, what she has earned per week and month (with charts), who still owes her, and a playground to see how much more she would make by taking on more students. Success: she opens it, sees her week and her month at a glance, and enjoys playing with "¿y si sumo alumnos?".
+Keep her private-class agenda and money in one place: who comes when, what each one pays per class, what she has earned per week and month (with charts), who still owes her, and a playground to see how much more she would make by taking on more students. Success: she opens it, sees her week and her month at a glance, and enjoys playing with "¿y si sumo alumnos?".
 
 ## Positioning
 
@@ -26,6 +26,7 @@ A personal class book for one tutor, not a booking or invoicing system: no clien
 
 ## Operating Context
 
+- Each student pays **one price per class, whatever its length**; classes are usually 50 minutes, sometimes 60 (confirmed 2026-10-17, ADR 0007).
 - Students mostly come at the **same weekly slot** (confirmed); she cancels, moves or adds an extra class when something changes.
 - A class counts as **earned once its time passes** unless she suspends it; she **marks payments**, so the app knows who owes her and how much (confirmed).
 - Students **pay at the start of the month for the whole month** (the Cuota), and **a Clase the student misses is still charged**. One she suspends is not (confirmed 2026-10-04, ADR 0006).
