@@ -166,6 +166,12 @@ const durationSelect = (name, value = DEFAULT_MINUTES, testid = "") => {
   const list = DURATIONS.includes(Number(value)) ? DURATIONS : [...DURATIONS, Number(value)].sort((x, y) => x - y);
   return `<select class="input" name="${name}" ${testid ? `data-testid="${testid}"` : ""}>${list.map((m) => `<option value="${m}" ${m === Number(value) ? "selected" : ""}>${fmtDuration(m)}</option>`).join("")}</select>`;
 };
+/** Presencial or Zoom: two pills, like the currency picker. */
+const modeSeg = (value = "onsite", testid = "") =>
+  `<fieldset class="field seg-field" ${testid ? `data-testid="${testid}"` : ""}><legend>Dónde</legend><div class="seg">
+    <label><input type="radio" name="mode" value="onsite" ${value !== "zoom" ? "checked" : ""}><span>Presencial</span></label>
+    <label><input type="radio" name="mode" value="zoom" ${value === "zoom" ? "checked" : ""}><span>${icon("video")}Zoom</span></label></div></fieldset>`;
+const zoomTag = (mode) => (mode === "zoom" ? " · Zoom" : "");
 const weekdaySelect = (name, value = 1, testid = "") =>
   `<select class="input" name="${name}" ${testid ? `data-testid="${testid}"` : ""}>${DAYS.map((d, i) => `<option value="${i + 1}" ${i + 1 === Number(value) ? "selected" : ""}>${d[0].toUpperCase() + d.slice(1)}</option>`).join("")}</select>`;
 
@@ -269,10 +275,10 @@ function classLabel(c) {
     : c.status === "given" ? `<span class="state">${icon("check")}dada</span>`
     : c.moved_from ? `<span class="state">${icon("calendar-clock")}movida</span>`
     : c.kind === "extra" ? `<span class="state">${icon("plus")}extra</span>` : "";
-  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? cancelText(c) : "agendada"}${c.plan ? ", con planificación" : ""}`;
+  const label = `${c.student}, ${fmtDayLong(c.date)} ${c.start}, ${fmtDuration(c.minutes)}, ${shown(c.amount, c.currency)}, ${c.status === "given" ? "dada" : c.status === "cancelled" ? cancelText(c) : "agendada"}${c.mode === "zoom" ? ", por Zoom" : ""}${c.plan ? ", con planificación" : ""}`;
   return `<button type="button" class="clase is-${c.status} ${c.charge ? "is-charged" : ""} ${c.reason === "missed" ? "is-missed" : ""}" style="--c:${ink(c.student_id)}" data-key="${c.key}" aria-pressed="${c.key === selected}" aria-label="${esc(label)}" data-testid="clase">
     <span class="clase-top"><span class="clase-time">${c.start}</span>${c.plan ? `<span class="plan-mark" data-testid="plan-mark">${icon("pencil")}</span>` : ""}<span class="clase-dur">${fmtDuration(c.minutes)}</span></span>
-    <span class="clase-name hand">${esc(c.student)}</span>
+    <span class="clase-name hand">${esc(c.student)}${c.mode === "zoom" ? ` <span class="zoom-mark" data-testid="zoom-mark" title="Zoom">${icon("video")}</span>` : ""}</span>
     <span class="clase-foot"><span class="amount">${c.status === "cancelled" && !c.charge ? "—" : shown(c.amount, c.currency)}</span>${state}</span>
   </button>`;
 }
@@ -285,6 +291,7 @@ function selectedPanel(c) {
       <p class="muted">${fmtDayLong(c.date)} · ${c.start} a ${end}</p></div></div>
     <p class="selected-money">${c.status === "cancelled" ? (c.charge ? `${c.reason === "missed" ? "Faltó" : "Suspendida"}, <strong>se cobra ${shown(c.amount, c.currency)}</strong>` : "Suspendida, no se cobra") : `${c.status === "given" ? "Dada" : "Agendada"} · <strong>${shown(c.amount, c.currency)}</strong>`}
       ${c.moved_from ? `<br><span class="muted">Movida desde el ${fmtDayLong(c.moved_from)}</span>` : ""}</p>
+    <form class="mode-form" data-testid="class-mode">${modeSeg(c.mode)}</form>
     <div class="btn-col">
       ${c.status !== "cancelled" ? `<button type="button" class="btn btn-line btn-sm" data-act="missed" data-testid="cancel-missed">${icon("user-x")}Faltó <span class="btn-note">se cobra</span></button>
         <button type="button" class="btn btn-line btn-sm" data-act="suspend" data-testid="cancel-suspend">${icon("calendar-x")}La suspendo yo <span class="btn-note">no se cobra</span></button>` : ""}
@@ -318,6 +325,7 @@ function wireSelected(c, params) {
   $("[data-act=suspend]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key, { reason: "suspended" }), `Suspendida: ${when}. No se cobra.`));
   $("[data-act=charge-anyway]", panel)?.addEventListener("click", () => act(() => reg.cancelClass(c.key, { reason: c.reason, charge: true }), `Suspendida, se cobra igual: ${when}.`));
   $("[data-act=restore]", panel)?.addEventListener("click", () => act(() => reg.restoreClass(c.key), `La clase volvió a su día: ${when}.`));
+  $(".mode-form", panel).addEventListener("change", (e) => act(() => reg.setClassMode(c.key, e.target.value), e.target.value === "zoom" ? `Por Zoom: ${when}.` : `Presencial: ${when}.`));
   const plan = $(".plan-form", panel);
   plan.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -378,6 +386,7 @@ function extraForm(students, day) {
       <label class="field"><span>Hora</span><input class="input" name="start" value="" inputmode="numeric" placeholder="17:30" data-testid="extra-start"></label>
     </div>
     <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "extra-minutes")}</label>
+    ${modeSeg("onsite", "extra-mode")}
     <div class="form-msg"></div>
     <div class="row"><button class="btn btn-go btn-sm" type="submit" data-testid="extra-save">${icon("check")}Agregar</button>
       <button class="btn btn-quiet btn-sm" type="button" data-act="close-extra">Cancelar</button></div>
@@ -392,7 +401,7 @@ function wireExtra(params) {
     e.preventDefault();
     const date = parseDM(form.date.value);
     if (!date) { $(".form-msg", form).innerHTML = `<div class="notice notice-error" role="alert">No entendí el día. Escribilo como 17/10.</div>`; return; }
-    const ok = actInForm(form, () => reg.addExtra(form.student.value, { date, start: form.start.value, minutes: form.minutes.value }),
+    const ok = actInForm(form, () => reg.addExtra(form.student.value, { date, start: form.start.value, minutes: form.minutes.value, mode: form.mode.value }),
       `Clase extra agregada: ${fmtDayLong(date)}.`);
     if (ok) { extraOpen = false; selected = ok; if (weekStart(date) !== (params.get("semana") || weekStart(reg.today()))) location.hash = `#/agenda?semana=${weekStart(date)}`; else route(); }
   });
@@ -466,6 +475,7 @@ function viewAlumnos(params) {
         <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:00" data-testid="new-start"></label>
         <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "new-minutes")}</label>
       </div>
+      ${modeSeg("onsite", "new-mode")}
       <div class="form-msg"></div>
       <div class="row"><button class="btn btn-go" type="submit" data-testid="new-save">${icon("check")}Guardar</button><button class="btn btn-quiet" type="button" id="add-cancel">Cancelar</button></div>
     </form>
@@ -495,7 +505,7 @@ function viewAlumnos(params) {
     }
     const s = actInForm(f, () => {
       const st = reg.addStudent({ name: f.name.value, rate: f.rate.value, currency: f.currency.value, from: "2000-01-01", ...schoolValues(f) });
-      if (f.weekday.value) reg.addSlot(st.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value });
+      if (f.weekday.value) reg.addSlot(st.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value, mode: f.mode.value });
       return st;
     }, (st) => `Agregado: ${st.name}.`);
     if (s) location.hash = `#/alumnos/${s.id}`;
@@ -536,7 +546,7 @@ function viewAlumno(id) {
       ${avatar(s, 84)}
       <div><div class="name-row"><h1>${esc(s.name)}</h1>
           <button type="button" class="btn btn-quiet btn-icon" data-act="edit-open" aria-expanded="false" aria-controls="edit-form" aria-label="Editar los datos de ${esc(s.name)}" data-testid="edit-open">${icon("pencil")}</button></div>
-        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> ${ratePer(s.rate_per)}</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
+        <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> ${ratePer(s.rate_per)}</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)}${sl.mode === "zoom" ? ", Zoom" : ""})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
         ${s.school || s.grade || s.teacher || s.teacher_email ? `<p class="school-line" data-testid="school-line">${[s.school && esc(s.school), gradeText(s.grade)].filter(Boolean).join(" · ")}${s.teacher || s.teacher_email ? `${s.school || s.grade ? "<br>" : ""}Maestra/o: ${esc(s.teacher || "")}${s.teacher_email ? ` <a href="mailto:${esc(s.teacher_email)}" data-testid="teacher-mail">${icon("mail")}${esc(s.teacher_email)}</a>` : ""}` : ""}</p>` : ""}
         ${s.notes ? `<p class="notes-line muted" data-testid="notes-line">${esc(s.notes)}</p>` : ""}</div>
       <div class="btn-col">
@@ -582,7 +592,7 @@ function viewAlumno(id) {
       <section class="panel" id="part-slots" ${part === "slots" ? "" : "hidden"} data-testid="slots">
         <h2>Días de clase</h2>
         ${s.slots.length ? `<ul class="plain-list">${s.slots.map((sl) => `<li class="slot-row" data-slot="${sl.id}">
-            <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}${slotDates(sl) ? `<span class="muted">${slotDates(sl)}</span>` : ""}</span>
+            <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}${zoomTag(sl.mode)}${slotDates(sl) ? `<span class="muted">${slotDates(sl)}</span>` : ""}</span>
             <span class="row"><button type="button" class="btn btn-quiet btn-sm" data-edit-slot="${sl.id}">${icon("pencil")}Cambiar</button>
             <button type="button" class="btn btn-quiet btn-sm btn-danger" data-end-slot="${sl.id}">${icon("x")}Quitar</button></span>
             <form class="slot-form inline-form" data-slot-form="${sl.id}" hidden novalidate>
@@ -591,6 +601,7 @@ function viewAlumno(id) {
                 <label class="field"><span>Hora</span><input class="input" name="start" value="${sl.start}" inputmode="numeric"></label>
                 <label class="field"><span>Duración</span>${durationSelect("minutes", sl.minutes)}</label>
               </div>
+              ${modeSeg(sl.mode)}
               <label class="field"><span>Desde</span><input class="input" name="from" value="${fmtTyped(today)}" inputmode="numeric"><small>Las clases de antes quedan como estaban.</small></label>
               <div class="form-msg"></div>
               <button class="btn btn-go btn-sm" type="submit">Guardar el cambio</button>
@@ -602,6 +613,7 @@ function viewAlumno(id) {
             <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:00" data-testid="slot-start"></label>
             <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "slot-minutes")}</label>
           </div>
+          ${modeSeg("onsite", "slot-mode")}
           <div class="form-msg"></div>
           <button class="btn btn-line btn-sm" type="submit" data-testid="slot-save">${icon("plus")}Agregar día</button>
         </form>`}
@@ -631,10 +643,11 @@ function viewAlumno(id) {
             <label class="field"><span>Hora</span><input class="input" name="start" inputmode="numeric" placeholder="17:30" data-testid="book-start"></label>
             <label class="field"><span>Duración</span>${durationSelect("minutes", DEFAULT_MINUTES, "book-minutes")}</label>
           </div>
+          ${modeSeg("onsite", "book-mode")}
           <div class="form-msg"></div>
           <button class="btn btn-go btn-sm" type="submit" data-testid="book-save">${icon("check")}Agendar</button>
         </form>`}
-        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? cancelText(c) : c.moved_from ? "movida" : fmtDuration(c.minutes)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agendale una con <strong>Agendar clase</strong>."}</p>`}
+        ${upcoming.length ? `<ul class="plain-list">${upcoming.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)} · ${c.start}</span><span class="muted">${c.status === "cancelled" ? cancelText(c) : c.moved_from ? "movida" : fmtDuration(c.minutes)}${zoomTag(c.mode)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted" data-testid="upcoming-empty">No hay clases en las próximas 4 semanas.${s.archived ? "" : s.slots.length ? "" : " Agendale una con <strong>Agendar clase</strong>."}</p>`}
         <h3 class="sub-h">Últimas clases</h3>
         ${recent.length ? `<ul class="plain-list">${recent.slice(0, 8).map((c) => `<li class="${c.plan ? "has-plan" : ""}"><span>${fmtDayLong(c.date)}</span><span>${c.status === "cancelled" ? (c.charge ? `${c.reason === "missed" ? "faltó" : "suspendida"} · ${moneyIn(c.amount, c.currency)}` : "suspendida") : moneyIn(c.amount, c.currency)}</span>${planLine(c)}</li>`).join("")}</ul>` : `<p class="muted">Todavía no tuvo clases.</p>`}
       </section>
@@ -650,7 +663,7 @@ function viewAlumno(id) {
     e.preventDefault();
     const date = parseDM(book.date.value);
     if (!date) { $(".form-msg", book).innerHTML = `<div class="notice notice-error" role="alert">No entendí el día. Escribilo como 17/10.</div>`; return; }
-    actInForm(book, () => reg.addExtra(s.id, { date, start: book.start.value, minutes: book.minutes.value }), `Clase agendada: ${fmtDayLong(date)} a las ${book.start.value.trim()}.`);
+    actInForm(book, () => reg.addExtra(s.id, { date, start: book.start.value, minutes: book.minutes.value, mode: book.mode.value }), `Clase agendada: ${fmtDayLong(date)} a las ${book.start.value.trim()}.`);
   });
   $("[data-act=archive]").addEventListener("click", () => act(() => reg.setArchived(s.id, !s.archived), s.archived ? `${s.name} volvió a la lista.` : `${s.name} archivado. Sus clases futuras se quitaron; lo cobrado queda.`));
   const pay = $("#pay-form");
@@ -668,13 +681,13 @@ function viewAlumno(id) {
     e.preventDefault();
     const from = parseDM(f.from.value);
     if (!from) { $(".form-msg", f).innerHTML = `<div class="notice notice-error" role="alert">No entendí desde cuándo.</div>`; return; }
-    actInForm(f, () => reg.changeSlot(f.dataset.slotForm, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value, from }), "Horario cambiado.");
+    actInForm(f, () => reg.changeSlot(f.dataset.slotForm, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value, mode: f.mode.value, from }), "Horario cambiado.");
   }));
   $$("[data-end-slot]").forEach((b) => b.addEventListener("click", () => act(() => reg.endSlot(b.dataset.endSlot), "Quitado ese día. Las clases que ya pasaron quedan.")));
   $("#slot-add")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const f = e.target;
-    actInForm(f, () => reg.addSlot(s.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value }), "Día agregado.");
+    actInForm(f, () => reg.addSlot(s.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value, mode: f.mode.value }), "Día agregado.");
   });
   $$("[data-part]").forEach((b) => b.addEventListener("click", () => {
     openPart.part = b.dataset.part;
@@ -1007,13 +1020,14 @@ function viewAyuda() {
         "En la <strong>Agenda</strong>, tocá la clase.",
         "Si el alumno no viene, tocá <strong>Faltó</strong>: la clase se cobra igual. Si la suspendés vos, tocá <strong>La suspendo yo</strong>: no se cobra (y si después querés cobrarla, <strong>Cobrarla igual</strong>).",
         "Para cambiarla de día: <strong>Mover</strong>, escribí el día y la hora nuevos y tocá <strong>Mover la clase</strong>.",
+        "Si una clase es por Zoom (o vuelve a ser presencial), tocala y elegí <strong>Presencial</strong> o <strong>Zoom</strong>: cambia solo esa. Para que sea siempre por Zoom, cambiá su día en la ficha. Las de Zoom llevan una camarita.",
         "Si marcaste que faltó, la suspendiste o la moviste y querés dejarla como era, tocala y elegí <strong>Volver a su día y hora</strong>. (Una clase extra que moviste no tiene ese botón: movela de nuevo.)",
         "Para preparar una clase, tocala y escribí en <strong>Planificación</strong> qué van a trabajar; tocá <strong>Guardar planificación</strong>. La etiqueta queda con un lápiz, y la planificación se ve también en la ficha del alumno.",
         "¿Te equivocaste? Tocá <strong>Deshacer</strong> en el aviso que aparece abajo.",
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("extra", "calendar-plus", "Anotar una clase extra", [
         "En la <strong>Agenda</strong>, tocá el botón amarillo <strong>Clase extra</strong>.",
-        "Elegí con quién, el día, la hora y cuánto dura, y tocá <strong>Agregar</strong>. (También podés hacerlo desde su ficha, con <strong>Agendar clase</strong>.)",
+        "Elegí con quién, el día, la hora, cuánto dura y si es presencial o por Zoom, y tocá <strong>Agregar</strong>. (También podés hacerlo desde su ficha, con <strong>Agendar clase</strong>.)",
         "Si choca con otra clase de ese día, te avisa con quién.",
       ], ["#/agenda", "Ir a la Agenda"])}
       ${card("cobrar", "hand-coins", "Cobrar", [

@@ -26,6 +26,7 @@ There are no PRs (solo project committed to `main`), so verdicts are recorded he
 | 2026-10-17 | Updates show on the next open (service worker skips Safari's 10-minute HTTP cache, reloads once on a new version); section chips on the student page | unit 50, e2e 136/136 (band offset mutated red, then reverted). The update path was probed in WebKit with max-age=600: inconclusive, the old worker also updated there. | No fresh independent run yet. |
 | 2026-10-17 | Student page: one part at a time (chips replace the scroll-to links), Datos behind a pencil by the name, notes under the name | unit 50, e2e 143/143 (open part reset on every redraw: drive went red at the first save, then reverted) | No fresh independent run yet. |
 | 2026-10-17 | Delete a Tarifa (all but the first) from the list under Tarifa, with Deshacer | unit 51 (first-Tarifa guard removed: red), e2e 147/147 | No fresh independent run yet. |
+| 2026-10-17 | Presencial / Zoom per Horario fijo, Clase extra and single Clase (camera on the label, Dónde switch, Excel column) | unit 52 (per-Clase lookup removed: red), e2e 154/154 | No fresh independent run yet. A first layout put the camera in the label's top row and overflowed Friday's column in landscape; moved after the name. |
 
 ## Open items
 

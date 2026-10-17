@@ -98,6 +98,11 @@
 .plan-mark { color: var(--ink-2); display: inline-flex; margin-left: auto; }
 .plan-mark svg, .plan-line svg { width: 14px; height: 14px; flex: none; }
 .plan-mark + .clase-dur { margin-left: 0; }
+/* a Zoom Clase: a small camera after the name, which wraps in narrow columns */
+.zoom-mark { color: var(--ink-2); white-space: nowrap; }
+.zoom-mark svg { width: 16px; height: 16px; vertical-align: -2px; }
+.seg span svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 5px; }
+.mode-form { margin: 0 0 12px; }
 .plan-line { flex-basis: 100%; display: flex; gap: 6px; align-items: baseline; margin: 2px 0 0; color: var(--ink-2); font-size: .9375rem; white-space: pre-line; overflow-wrap: anywhere; }
 .rail-selected .btn-col { gap: 8px; }
 .move-form { display: grid; gap: 10px; margin: 12px 0 4px; }

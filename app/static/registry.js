@@ -6,6 +6,8 @@ export const DEFAULT_SETTINGS = { currency: "UYU", usd_rate: 40, title: "Mis cla
 export const CURRENCIES = ["UYU", "USD"];
 /** Why a Clase didn't happen: the student missed it (Faltó, charged) or she suspended it. */
 export const CANCEL_REASONS = ["missed", "suspended"];
+/** Where a Clase happens: in person (Presencial) or over Zoom. It never changes money. */
+export const MODES = ["onsite", "zoom"];
 /** How dates are shown: "7 de octubre", "7 oct" or "7/10". */
 export const DATE_STYLES = ["long", "short", "numeric"];
 /** The eight forro colours; each student gets one for good (least used first). */
@@ -35,6 +37,7 @@ export function emptyState() {
     seq: { student: 0, rate: 0, slot: 0, change: 0, extra: 0, payment: 0 },
     students: [], rates: [], slots: [], changes: [], extras: [], payments: [],
     plans: [], // { key, text }: the Planificación of one Clase, by its class key
+    modes: [], // { key, mode }: one weekly Clase held differently from its Horario fijo (Zoom instead of Presencial)
     settings: { ...DEFAULT_SETTINGS },
     last_backup: null,
   };
@@ -84,6 +87,10 @@ function validAmount(value, label) {
   const n = typeof value === "number" ? value : parseNumber(value);
   if (!Number.isFinite(n) || n < 0 || n > 10_000_000) throw new RegistryError("invalid", `${label} tiene que ser un número.`);
   return Math.round(n * 100) / 100;
+}
+function validMode(m) {
+  if (!MODES.includes(m)) throw new RegistryError("invalid", "¿Presencial o por Zoom?");
+  return m;
 }
 function validCurrency(c) {
   if (!CURRENCIES.includes(c)) throw new RegistryError("invalid", "La moneda tiene que ser UYU o USD.");
@@ -323,18 +330,19 @@ export class Registry {
   }
 
   // ── weekly slots ─────────────────────────────────────────────────────
-  addSlot(studentId, { weekday: wd, start, minutes, from = this.today() } = {}) {
+  addSlot(studentId, { weekday: wd, start, minutes, mode = "onsite", from = this.today() } = {}) {
     const st = this._requireStudent(studentId);
     if (st.archived) throw new RegistryError("invalid", `${st.name} está archivado/a.`);
     wd = Number(wd);
     if (!(wd >= 1 && wd <= 7)) throw new RegistryError("invalid", "Elegí el día de la semana.");
     start = validTime(start);
     minutes = validMinutes(minutes);
+    mode = validMode(mode);
     from = validDate(from);
     this._checkOverlap({ weekday: wd, start, minutes, from });
     const id = this._write((s) => {
       const sid = this._id("slot");
-      s.slots.push({ id: sid, student_id: st.id, weekday: wd, start, minutes, from, to: null });
+      s.slots.push({ id: sid, student_id: st.id, weekday: wd, start, minutes, mode, from, to: null });
       return sid;
     });
     return this.slot(id);
@@ -391,10 +399,11 @@ export class Registry {
     return { oldTo: addDays(from, -1), newFrom: from };
   }
 
-  /** Change day/time/length from a date on; classes before that keep the old slot. */
-  changeSlot(id, { weekday: wd, start, minutes, from = this.today() } = {}) {
+  /** Change day/time/length/Presencial-Zoom from a date on; classes before that keep the old slot. */
+  changeSlot(id, { weekday: wd, start, minutes, mode, from = this.today() } = {}) {
     const old = this.slot(id);
-    const next = { weekday: wd == null ? old.weekday : Number(wd), start: start == null ? old.start : validTime(start), minutes: minutes == null ? old.minutes : validMinutes(minutes) };
+    const next = { weekday: wd == null ? old.weekday : Number(wd), start: start == null ? old.start : validTime(start), minutes: minutes == null ? old.minutes : validMinutes(minutes),
+      mode: mode == null ? old.mode || "onsite" : validMode(mode) };
     if (!(next.weekday >= 1 && next.weekday <= 7)) throw new RegistryError("invalid", "Elegí el día de la semana.");
     const { oldTo, newFrom } = this._cut(old, validDate(from));
     this._checkOverlap({ ...next, from: newFrom }, old.id);
@@ -409,10 +418,12 @@ export class Registry {
       }
       // plans and changes of the Clases from then on follow them (to that week's new weekday)
       const shift = next.weekday - old.weekday;
-      for (const p of s.plans) {
+      for (const p of [...s.plans, ...s.modes]) {
         const m = p.key.match(/^s(\d+)-(\d{4}-\d{2}-\d{2})$/);
         if (m && Number(m[1]) === old.id && m[2] >= newFrom) p.key = `s${nid}-${addDays(m[2], shift)}`;
       }
+      // a Clase held differently from the old default that now matches the new one needs no exception
+      s.modes = s.modes.filter((x) => !(x.key.startsWith(`s${nid}-`) && x.mode === next.mode));
       for (const c of s.changes) if (c.slot_id === old.id && c.date >= newFrom) Object.assign(c, { slot_id: nid, date: addDays(c.date, shift) });
       return nid;
     });
@@ -507,15 +518,16 @@ export class Registry {
     });
   }
 
-  addExtra(studentId, { date, start, minutes } = {}) {
+  addExtra(studentId, { date, start, minutes, mode = "onsite" } = {}) {
     const st = this._requireStudent(studentId);
     date = validDate(date);
     start = validTime(start);
     minutes = validMinutes(minutes);
+    mode = validMode(mode);
     this._checkClassClash({ date, start, minutes });
     const id = this._write((s) => {
       const eid = this._id("extra");
-      s.extras.push({ id: eid, student_id: st.id, date, start, minutes, cancelled: false, charge: false });
+      s.extras.push({ id: eid, student_id: st.id, date, start, minutes, mode, cancelled: false, charge: false });
       return eid;
     });
     return `e${id}`;
@@ -537,6 +549,27 @@ export class Registry {
       if (t) s.plans.push({ key: id, text: t });
     });
     return t;
+  }
+
+  /**
+   * Presencial or Zoom for one Clase. A Clase extra keeps it itself; a weekly one keeps it by
+   * class key only when it differs from its Horario fijo, so it follows the Clase like a Planificación.
+   */
+  setClassMode(key, mode) {
+    mode = validMode(mode);
+    const k = this._parseKey(key);
+    if (k.extra_id) {
+      if (!this.state.extras.some((e) => e.id === k.extra_id)) throw new RegistryError("not_found", "No encontré esa clase.");
+      this._write((s) => { s.extras.find((e) => e.id === k.extra_id).mode = mode; });
+      return mode;
+    }
+    const slot = this._requireOccurrence(k);
+    const id = String(key);
+    this._write((s) => {
+      s.modes = s.modes.filter((x) => x.key !== id);
+      if (mode !== (slot.mode || "onsite")) s.modes.push({ key: id, mode });
+    });
+    return mode;
   }
 
   _requireOccurrence({ slot_id, date }) {
@@ -564,6 +597,7 @@ export class Registry {
     const out = [];
     const changes = new Map(this.state.changes.map((c) => [`${c.slot_id}-${c.date}`, c]));
     const plans = new Map(this.state.plans.map((p) => [p.key, p.text]));
+    const modes = new Map(this.state.modes.map((x) => [x.key, x.mode]));
     const stopped = new Map(this.state.students.filter((x) => x.archived && x.archived_at).map((x) => [x.id, x.archived_at]));
     const push = (o) => {
       if (stopped.has(o.student_id) && `${o.date} ${o.start}` >= stopped.get(o.student_id)) return; // after archiving
@@ -574,7 +608,8 @@ export class Registry {
       const amount = this._price(o.student_id, o.rate_date || o.date, o.minutes);
       // cancels saved before reasons existed: a charged one was a Faltó, an uncharged one a suspension
       const reason = o.cancelled ? o.reason || (o.charge ? "missed" : "suspended") : null;
-      out.push({ ...o, reason, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "" });
+      out.push({ ...o, reason, end, status, past: done, billable: o.cancelled ? Boolean(o.charge) : true, amount, currency: st.currency, student: st.name, plan: plans.get(o.key) || "",
+        mode: modes.get(o.key) || o.mode || "onsite" });
     };
     for (const slot of this.state.slots) {
       let d = addDays(from, (slot.weekday - weekday(from) + 7) % 7);
@@ -582,7 +617,7 @@ export class Registry {
         if (d < slot.from || (slot.to && d > slot.to)) continue;
         const ch = changes.get(`${slot.id}-${d}`);
         if (ch?.new_date) continue; // moved (and maybe cancelled there): shown on its new day (below)
-        push({ key: `s${slot.id}-${d}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: d, start: slot.start, minutes: slot.minutes,
+        push({ key: `s${slot.id}-${d}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: d, start: slot.start, minutes: slot.minutes, mode: slot.mode,
           cancelled: ch?.kind === "cancel", charge: ch?.charge || false, reason: ch?.reason || null });
       }
     }
@@ -591,11 +626,11 @@ export class Registry {
       const slot = this.state.slots.find((s) => s.id === ch.slot_id);
       if (!slot) continue;
       push({ key: `s${slot.id}-${ch.date}`, kind: "slot", slot_id: slot.id, student_id: slot.student_id, date: ch.new_date, start: ch.new_start,
-        minutes: ch.new_minutes, moved_from: ch.date, rate_date: ch.date, cancelled: ch.kind === "cancel", charge: ch.charge || false, reason: ch.reason || null });
+        minutes: ch.new_minutes, mode: slot.mode, moved_from: ch.date, rate_date: ch.date, cancelled: ch.kind === "cancel", charge: ch.charge || false, reason: ch.reason || null });
     }
     for (const ex of this.state.extras) {
       if (ex.date < from || ex.date > to) continue;
-      push({ key: `e${ex.id}`, kind: "extra", extra_id: ex.id, student_id: ex.student_id, date: ex.date, start: ex.start, minutes: ex.minutes,
+      push({ key: `e${ex.id}`, kind: "extra", extra_id: ex.id, student_id: ex.student_id, date: ex.date, start: ex.start, minutes: ex.minutes, mode: ex.mode,
         cancelled: ex.cancelled, charge: ex.charge, reason: ex.reason || null });
     }
     out.sort((a, b) => (a.date === b.date ? toMinutes(a.start) - toMinutes(b.start) : a.date < b.date ? -1 : 1));
@@ -787,8 +822,8 @@ export class Registry {
       const cs = this.classesBetween(this._firstDate(), addDays(this.today(), 28));
       return {
         name: "Clases",
-        columns: [["Fecha", 12, "date"], ["Hora", 8], ["Alumno", 26], ["Minutos", 9], ["Estado", 12], ["Monto", 11], ["Moneda", 8]],
-        rows: cs.map((c) => [c.date, c.start, c.student, c.minutes, c.cancelled ? (c.reason === "missed" ? "Faltó (se cobra)" : c.charge ? "Suspendida (se cobra)" : "Suspendida") : c.past ? "Dada" : "Agendada",
+        columns: [["Fecha", 12, "date"], ["Hora", 8], ["Alumno", 26], ["Minutos", 9], ["Modalidad", 11], ["Estado", 12], ["Monto", 11], ["Moneda", 8]],
+        rows: cs.map((c) => [c.date, c.start, c.student, c.minutes, c.mode === "zoom" ? "Zoom" : "Presencial", c.cancelled ? (c.reason === "missed" ? "Faltó (se cobra)" : c.charge ? "Suspendida (se cobra)" : "Suspendida") : c.past ? "Dada" : "Agendada",
           c.billable ? c.amount : 0, c.currency]),
       };
     }
@@ -830,7 +865,7 @@ export class Registry {
     const ids = demo.STUDENTS.map(([name, rate, currency, slots, ratesBefore]) => {
       const st = this.addStudent({ name, rate: ratesBefore ?? rate, currency, demo: true });
       if (ratesBefore != null) this.setRate(st.id, rate, addDays(weekStart(today), -7 * 6));
-      for (const [wd, time, minutes] of slots) this.addSlot(st.id, { weekday: wd, start: time, minutes, from: start });
+      for (const [wd, time, minutes, mode = "onsite"] of slots) this.addSlot(st.id, { weekday: wd, start: time, minutes, mode, from: start });
       return st.id;
     });
     // a cancellation, a charged cancellation, a moved class and an extra class, all recent
@@ -863,6 +898,7 @@ export class Registry {
       s.changes = s.changes.filter((x) => !demoSlots.has(x.slot_id));
       const demoExtras = new Set(s.extras.filter((x) => demo.has(x.student_id)).map((x) => x.id));
       s.plans = s.plans.filter((p) => { const m = p.key.match(/^s(\d+)-|^e(\d+)$/); return !(m && (m[1] ? demoSlots.has(Number(m[1])) : demoExtras.has(Number(m[2])))); });
+      s.modes = s.modes.filter((x) => !demoSlots.has(Number(x.key.match(/^s(\d+)-/)?.[1])));
       s.extras = s.extras.filter((x) => !demo.has(x.student_id));
       s.payments = s.payments.filter((x) => !demo.has(x.student_id));
     });

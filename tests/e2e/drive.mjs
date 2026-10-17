@@ -189,8 +189,10 @@ try {
   await page.waitForSelector("[data-testid=book-form] .notice-error");
   check("flexible", "booking over another Clase is refused, naming who", (await text("[data-testid=book-form] .notice-error")).includes("Bruno Rodríguez") && !(await saved()).extras.some((x) => x.student_id === tomas.id));
   await page.fill("[data-testid=book-start]", "10:00");
+  await page.tap("[data-testid=book-mode] label:has(input[value=zoom])");
   await page.tap("[data-testid=book-save]");
   await page.waitForSelector("[data-testid=student-classes] .plain-list li");
+  check("zoom", "Agendar clase saves it as Zoom and Próximas clases says so", (await saved()).extras.find((x) => x.date === "2026-10-09" && x.start === "10:00")?.mode === "zoom" && (await text("[data-testid=student-classes] .plain-list li >> nth=0")).includes("Zoom"));
   st = await saved();
   const booked = st.extras.filter((x) => x.student_id === tomas.id);
   check("flexible", "the Clase is saved (Friday 10:00, 50 min) and listed under Próximas clases", booked.length === 1 && booked[0].date === "2026-10-09" && booked[0].start === "10:00" && booked[0].minutes === 50 && (await text("[data-testid=student-classes] .plain-list li >> nth=0")).startsWith("viernes 9 de octubre · 10:00"), JSON.stringify(booked));
@@ -256,16 +258,34 @@ try {
   check("move", "the label now sits on Friday", await clase("Lucía Fernández", "viernes 9 de octubre").count() === 1 && await clase("Lucía Fernández", "sábado 10 de octubre").count() === 0);
   check("move", "moving can be undone from its toast", (await page.$$(".toast [data-undo]")).length === 1);
 
+  // ── Presencial / Zoom ──
+  const emmaLabel = clase("Emma Acosta", "martes 6 de octubre");
+  check("zoom", "the demo's Zoom student has a camera on her label, and says so", await emmaLabel.locator("[data-testid=zoom-mark]").count() === 1 && (await emmaLabel.getAttribute("aria-label")).includes("por Zoom") && await clase("Sofía González", "martes 6 de octubre").locator("[data-testid=zoom-mark]").count() === 0);
+  await clase("Sofía González", "martes 6 de octubre").tap();
+  await page.waitForSelector("[data-testid=class-mode]");
+  check("zoom", "a selected Clase says Presencial", await page.isChecked("[data-testid=class-mode] input[value=onsite]"));
+  await page.tap("[data-testid=class-mode] label:has(input[value=zoom])");
+  await page.waitForTimeout(200);
+  st = await saved();
+  const sofiaTue = model(st).classesBetween("2026-10-06", "2026-10-06").find((c) => c.student === "Sofía González");
+  check("zoom", "Zoom for just that Clase is saved, the label gets the camera, money unchanged", sofiaTue.mode === "zoom" && st.modes.length === 1 && sofiaTue.amount === 750 && await clase("Sofía González", "martes 6 de octubre").locator("[data-testid=zoom-mark]").count() === 1 && model(st).classesBetween("2026-10-13", "2026-10-13").find((c) => c.student === "Sofía González").mode === "onsite");
+  await page.tap("[data-testid=class-mode] label:has(input[value=onsite])");
+  await page.waitForTimeout(200);
+  check("zoom", "…and Presencial puts it back like its weekly day", (await saved()).modes.length === 0);
+
   await page.tap("[data-testid=extra-toggle]");
   await page.selectOption("[data-testid=extra-student]", { label: "Sofía González" });
   await page.fill("[data-testid=extra-date]", "8/10");
   await page.fill("[data-testid=extra-start]", "11:00");
   check("fifty", "a Clase extra starts on 50 min", (await page.inputValue("[data-testid=extra-minutes]")) === "50");
+  check("zoom", "…and Presencial", await page.isChecked("[data-testid=extra-mode] input[value=onsite]"));
+  await page.tap("[data-testid=extra-mode] label:has(input[value=zoom])");
   await page.tap("[data-testid=extra-save]");
   await page.waitForTimeout(250);
   st = await saved();
   const sofia = student(st, "Sofía González");
   readback.extra = st.extras.filter((e) => e.student_id === sofia.id && e.date === "2026-10-08");
+  check("zoom", "the Clase extra is saved as Zoom", readback.extra[0]?.mode === "zoom");
   check("extra", "an extra class is saved and shows on Thursday", readback.extra.length === 1 && readback.extra[0].start === "11:00" && await clase("Sofía González", "jueves 8 de octubre").count() === 1, JSON.stringify(readback.extra));
   const sofiaExtra = model(st).classesBetween("2026-10-08", "2026-10-08").find((c) => c.kind === "extra" && c.student_id === sofia.id);
   check("fifty", "…50 min, charged her whole per-class Tarifa, and the label says so", readback.extra[0]?.minutes === 50 && sofiaExtra.amount === 750 && (await clase("Sofía González", "jueves 8 de octubre").textContent()).includes("50 min"), JSON.stringify(sofiaExtra && [sofiaExtra.minutes, sofiaExtra.amount]));

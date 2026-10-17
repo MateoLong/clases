@@ -33,6 +33,10 @@ An Alumno with no Horario fijo in force: they come when they can. All their Clas
 One sitting with one Alumno on one date. It comes from a Horario fijo, or it is a Clase extra.
 _Avoid_: sesión, lección, turno
 
+**Presencial**, **Zoom**:
+Where a Clase happens: in person, or over Zoom. A Horario fijo has one (Presencial unless she picks Zoom), changed from a date like the rest of it; a Clase extra has its own; and one Clase can be held the other way, which follows it when moved, like its Planificación. It never changes money.
+_Avoid_: virtual, online, modalidad (on screen it reads "Dónde")
+
 **Planificación**:
 What she plans to work on in one Clase. It belongs to that Clase and follows it when it is moved, cancelled or put back. It never changes money.
 _Avoid_: plan, notas (Notas belong to the Alumno)

@@ -114,7 +114,34 @@ test("cancels saved before reasons keep their money and read as Faltó / Suspend
   const r2 = new Registry(old, { now: () => clock });
   const [a, b] = r2.classesBetween(MON, TUE);
   assert.deepEqual([a.reason, a.billable, b.reason, b.billable], ["missed", true, "suspended", false]);
-  assert.deepEqual(r2.exportTable("classes").rows.filter((x) => x[0] === MON || x[0] === TUE).map((x) => x[4]), ["Faltó (se cobra)", "Suspendida"]);
+  assert.deepEqual(r2.exportTable("classes").rows.filter((x) => x[0] === MON || x[0] === TUE).map((x) => x[5]), ["Faltó (se cobra)", "Suspendida"]);
+});
+
+test("a Clase is Presencial or Zoom: from its Horario fijo, as a Clase extra, or one Clase on its own", () => {
+  assert.deepEqual(week().map((c) => c.mode), ["onsite", "onsite", "onsite"]);
+  const wed = week()[2];
+  r.setClassMode(wed.key, "zoom"); // just tonight
+  assert.deepEqual([week()[2].mode, week()[2].amount, r.state.modes.length], ["zoom", 1200, 1]);
+  assert.equal(r.classesBetween("2026-10-14", "2026-10-14")[0].mode, "onsite"); // next Wednesday as usual
+  r.moveClass(wed.key, { date: THU, start: "10:00" });
+  assert.equal(week().find((c) => c.key === wed.key).mode, "zoom"); // follows the Clase
+  r.setClassMode(wed.key, "onsite");
+  assert.equal(r.state.modes.length, 0); // back to its Horario fijo: no exception kept
+  // the Horario fijo goes Zoom from a date: earlier Clases stay Presencial
+  const emmaSlot = r.student(emma.id).slots[0];
+  r.changeSlot(emmaSlot.id, { mode: "zoom", from: "2026-10-12" });
+  assert.deepEqual([week()[1].mode, r.classesBetween("2026-10-13", "2026-10-13")[0].mode], ["onsite", "zoom"]);
+  // an exception follows its Clase to the slot's new weekday
+  r.setClassMode(`s${r.student(martina.id).slots[0].id}-2026-10-19`, "zoom");
+  r.changeSlot(r.student(martina.id).slots[0].id, { weekday: 2, start: "10:00", from: "2026-10-12" });
+  assert.equal(r.classesBetween("2026-10-20", "2026-10-20").find((c) => c.student_id === martina.id).mode, "zoom");
+  const ex = r.addExtra(joaquin.id, { date: "2026-10-09", start: "10:00", minutes: 50, mode: "zoom" });
+  assert.equal(r.classesBetween("2026-10-09", "2026-10-09")[0].mode, "zoom");
+  r.setClassMode(ex, "onsite");
+  assert.equal(r.classesBetween("2026-10-09", "2026-10-09")[0].mode, "onsite");
+  rejects(() => r.setClassMode(ex, "telepatía"), "invalid");
+  rejects(() => r.addSlot(emma.id, { weekday: 5, start: "09:00", minutes: 50, mode: "carta" }), "invalid");
+  assert.equal(r.exportTable("classes").rows.find((x) => x[0] === "2026-10-13" && x[2] === "Emma Acosta")[4], "Zoom");
 });
 
 test("a moved class shows on its new day and keeps its original rate", () => {
