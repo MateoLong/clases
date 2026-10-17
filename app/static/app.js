@@ -1070,4 +1070,6 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
+  // A new version took over while this page was opening: show it now, not on the next visit
+  if (navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
 }
