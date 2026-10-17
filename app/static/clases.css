@@ -163,16 +163,16 @@
 .seg input:focus-visible + span { outline: 3px solid var(--moña); outline-offset: 1px; }
 
 .detail-head .avatar { flex: none; }
-.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
-.detail-grid .panel { display: grid; gap: 10px; }
 .inline-form { display: grid; gap: 10px; margin-top: 6px; }
 .inline-form .btn { justify-self: start; }
 .sub-h { font-size: 1rem; margin-top: 10px; }
-/* the chips under a student's name jump to a part of the page; it is outlined for a moment when reached */
-.section-jump { margin: -12px 0 22px; }
-#edit-form { border-radius: 10px; }
-.detail-grid .panel, #edit-form { outline: 3px solid transparent; outline-offset: 4px; transition: outline-color .4s var(--ease-out); }
-.detail-grid .is-target { outline-color: var(--moña); }
+/* a student's page: the pencil by the name opens Datos; the chips under it pick the one part shown */
+.name-row { display: flex; align-items: center; gap: 6px; }
+.notes-line { margin-top: 6px; white-space: pre-line; }
+.edit-panel { max-width: 760px; margin-bottom: 22px; }
+.part-chips { margin: -12px 0 22px; }
+.detail-parts { max-width: 760px; }
+.detail-parts .panel { display: grid; gap: 10px; }
 .plain-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .plain-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
 .plain-list li.pay-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
@@ -300,7 +300,6 @@
   .day-classes { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   .free { text-align: left; padding: 10px 0; }
   .proj { grid-template-columns: 1fr; }
-  .detail-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
   .band-inner { display: grid; grid-template-columns: 1fr auto auto; }
@@ -321,5 +320,4 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .owing-list li.is-paid .stamp { animation: none; opacity: 1; }
-  .detail-grid .panel, #edit-form { transition: none; }
 }

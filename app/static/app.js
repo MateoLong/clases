@@ -510,23 +510,10 @@ function nextFreeDay(studentId) {
   return d;
 }
 
-/** The parts of a student's page, in the order of the chips under the name. */
-const SECTIONS = [["sec-account", "Cuenta"], ["sec-slots", "Días de clase"], ["sec-rate", "Tarifa"], ["edit-form", "Datos"], ["sec-classes", "Próximas clases"]];
-
-/**
- * Scroll a part of the page to just under the sticky band (the hash is the route, so no #anchors),
- * move focus to its heading and outline it for a moment: side by side in landscape, it may barely move.
- */
-function jumpTo(id) {
-  const target = document.getElementById(id);
-  if (!target) return;
-  const band = $(".band")?.getBoundingClientRect().height || 0;
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - band - 16, behavior: still ? "auto" : "smooth" });
-  target.querySelector("h2, h3")?.focus({ preventScroll: true });
-  target.classList.add("is-target");
-  setTimeout(() => target.classList.remove("is-target"), 1200);
-}
+/** The parts of a student's page, one open at a time; the chips under the name pick it. */
+const PARTS = [["account", "Cuenta"], ["slots", "Días de clase"], ["rate", "Tarifa"], ["classes", "Próximas clases"]];
+/** The open part survives the redraw after each change, and starts on Cuenta for another student. */
+let openPart = { id: null, part: "account" };
 
 /** A Clase's Planificación under its line in the student's lists. */
 const planLine = (c) => (c.plan ? `<p class="plan-line" data-testid="plan-line">${icon("pencil")}<span>${esc(c.plan)}</span></p>` : "");
@@ -539,24 +526,36 @@ function viewAlumno(id) {
   const pays = reg.payments(s.id);
   const cuota = reg.cuota(s.id);
   const rateHist = s.rates.length > 1 ? s.rates.map((r) => `${moneyIn(r.amount, s.currency)}${r.per === "hour" ? " por hora" : ""} ${r.from <= "2000-01-01" ? "al principio" : `desde el ${fmtDM(r.from)}`}`).join(" · ") : "";
+  if (openPart.id !== s.id) openPart = { id: s.id, part: "account" };
+  const part = openPart.part;
   main.innerHTML = `
     <a class="back" href="#/alumnos">${icon("chevron-left")}Alumnos</a>
     <div class="detail-head">
       ${avatar(s, 84)}
-      <div><h1>${esc(s.name)}</h1>
+      <div><div class="name-row"><h1>${esc(s.name)}</h1>
+          <button type="button" class="btn btn-quiet btn-icon" data-act="edit-open" aria-expanded="false" aria-controls="edit-form" aria-label="Editar los datos de ${esc(s.name)}" data-testid="edit-open">${icon("pencil")}</button></div>
         <div class="stat-line"><span><strong>${moneyIn(s.rate, s.currency)}</strong> ${ratePer(s.rate_per)}</span><span>${s.slots.length ? s.slots.map((sl) => `${slotText(sl)} (${fmtDuration(sl.minutes)})`).join(" · ") : "Sin día fijo"}</span>${s.archived ? '<span class="pill pill-off">Archivado</span>' : ""}</div>
-        ${s.school || s.grade || s.teacher || s.teacher_email ? `<p class="school-line" data-testid="school-line">${[s.school && esc(s.school), gradeText(s.grade)].filter(Boolean).join(" · ")}${s.teacher || s.teacher_email ? `${s.school || s.grade ? "<br>" : ""}Maestra/o: ${esc(s.teacher || "")}${s.teacher_email ? ` <a href="mailto:${esc(s.teacher_email)}" data-testid="teacher-mail">${icon("mail")}${esc(s.teacher_email)}</a>` : ""}` : ""}</p>` : ""}</div>
+        ${s.school || s.grade || s.teacher || s.teacher_email ? `<p class="school-line" data-testid="school-line">${[s.school && esc(s.school), gradeText(s.grade)].filter(Boolean).join(" · ")}${s.teacher || s.teacher_email ? `${s.school || s.grade ? "<br>" : ""}Maestra/o: ${esc(s.teacher || "")}${s.teacher_email ? ` <a href="mailto:${esc(s.teacher_email)}" data-testid="teacher-mail">${icon("mail")}${esc(s.teacher_email)}</a>` : ""}` : ""}</p>` : ""}
+        ${s.notes ? `<p class="notes-line muted" data-testid="notes-line">${esc(s.notes)}</p>` : ""}</div>
       <div class="btn-col">
         <button type="button" class="btn btn-quiet ${s.archived ? "" : "btn-danger"}" data-act="archive">${icon("archive")}${s.archived ? "Reactivar" : "Archivar"}</button>
       </div>
     </div>
-    <nav class="chips section-jump" aria-label="Ir a una parte de la ficha" data-testid="section-jump">
-      ${SECTIONS.map(([id, label]) => `<button type="button" class="chip" data-jump="${id}">${label}</button>`).join("")}
+    <form id="edit-form" class="panel inline-form edit-panel" hidden novalidate data-testid="edit-form">
+      <h2>Datos de ${esc(s.name)}</h2>
+      <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(s.name)}"></label>
+      ${schoolInputs(s, "edit")}
+      <label class="field"><span>Notas</span><textarea class="input paste" name="notes" rows="2" placeholder="Materia, teléfono de la mamá…">${esc(s.notes)}</textarea></label>
+      <div class="form-msg"></div>
+      <div class="row"><button class="btn btn-go btn-sm" type="submit" data-testid="edit-save">${icon("check")}Guardar</button><button class="btn btn-quiet btn-sm" type="button" data-act="edit-cancel">Cancelar</button></div>
+    </form>
+    <nav class="chips part-chips" aria-label="Partes de la ficha" data-testid="parts">
+      ${PARTS.map(([id, label]) => `<button type="button" class="chip" data-part="${id}" aria-pressed="${id === part}" aria-controls="part-${id}">${label}</button>`).join("")}
     </nav>
 
-    <div class="detail-grid">
-      <section class="panel account" id="sec-account" data-testid="account">
-        <h2 tabindex="-1">Cuenta</h2>
+    <div class="detail-parts">
+      <section class="panel account" id="part-account" ${part === "account" ? "" : "hidden"} data-testid="account">
+        <h2>Cuenta</h2>
         <p class="hero-figure ${s.owes > 0.004 ? "is-owed" : s.credit > 0.004 ? "is-credit" : ""}" data-testid="student-owes">${s.owes > 0.004 ? moneyIn(s.owes, s.currency) : s.credit > 0.004 ? moneyIn(s.credit, s.currency) : "Al día"}</p>
         <p class="muted">${s.owes > 0.004 ? "te debe" : s.credit > 0.004 ? "tiene a favor (va para el mes que viene)" : "no te debe nada"}${s.currency !== cur() && (s.owes > 0.004 || s.credit > 0.004) ? ` · ${shown(Math.abs(s.owes), s.currency)}` : ""}</p>
         <dl class="stats" data-testid="this-month">
@@ -578,8 +577,8 @@ function viewAlumno(id) {
             <button type="button" class="btn btn-quiet btn-sm" data-unpay="${p.id}" aria-label="Borrar el pago de ${moneyIn(p.amount, p.currency)} del ${fmtDM(p.date)}">${icon("x")}</button></li>`).join("")}</ul>` : ""}
       </section>
 
-      <section class="panel" id="sec-slots" data-testid="slots">
-        <h2 tabindex="-1">Días de clase</h2>
+      <section class="panel" id="part-slots" ${part === "slots" ? "" : "hidden"} data-testid="slots">
+        <h2>Días de clase</h2>
         ${s.slots.length ? `<ul class="plain-list">${s.slots.map((sl) => `<li class="slot-row" data-slot="${sl.id}">
             <span><strong>${DAYS[sl.weekday - 1][0].toUpperCase() + DAYS[sl.weekday - 1].slice(1)}</strong> ${sl.start} · ${fmtDuration(sl.minutes)}${slotDates(sl) ? `<span class="muted">${slotDates(sl)}</span>` : ""}</span>
             <span class="row"><button type="button" class="btn btn-quiet btn-sm" data-edit-slot="${sl.id}">${icon("pencil")}Cambiar</button>
@@ -606,8 +605,8 @@ function viewAlumno(id) {
         </form>`}
       </section>
 
-      <section class="panel" id="sec-rate" data-testid="rate">
-        <h2 tabindex="-1">Tarifa</h2>
+      <section class="panel" id="part-rate" ${part === "rate" ? "" : "hidden"} data-testid="rate">
+        <h2>Tarifa</h2>
         <p><strong>${moneyIn(s.rate, s.currency)}</strong> ${s.rate_per === "hour" ? "por hora (cada clase según lo que dura)" : "por clase, dure lo que dure"}${rateHist ? `<br><span class="muted">${rateHist}</span>` : ""}</p>
         <form id="rate-form" class="inline-form" novalidate>
           <div class="row-2">
@@ -618,18 +617,10 @@ function viewAlumno(id) {
           <div class="form-msg"></div>
           <button class="btn btn-line btn-sm" type="submit" data-testid="rate-save">Cambiar tarifa</button>
         </form>
-        <form id="edit-form" class="inline-form" novalidate>
-          <h3 class="sub-h" tabindex="-1">Datos</h3>
-          <label class="field"><span>Nombre</span><input class="input" name="name" value="${esc(s.name)}"></label>
-          ${schoolInputs(s, "edit")}
-          <label class="field"><span>Notas</span><textarea class="input paste" name="notes" rows="2" placeholder="Materia, teléfono de la mamá…">${esc(s.notes)}</textarea></label>
-          <div class="form-msg"></div>
-          <button class="btn btn-line btn-sm" type="submit">Guardar</button>
-        </form>
       </section>
 
-      <section class="panel" id="sec-classes" data-testid="student-classes">
-        <div class="panel-head"><h2 tabindex="-1">Próximas clases</h2>
+      <section class="panel" id="part-classes" ${part === "classes" ? "" : "hidden"} data-testid="student-classes">
+        <div class="panel-head"><h2>Próximas clases</h2>
           ${s.archived ? "" : `<button type="button" class="btn ${s.slots.length ? "btn-line" : "btn-go"} btn-sm" data-act="book-open" aria-expanded="false" data-testid="book-open">${icon("calendar-plus")}Agendar clase</button>`}</div>
         ${s.archived ? "" : `<form id="book-form" class="inline-form" hidden novalidate data-testid="book-form">
           <div class="grid-slot">
@@ -680,7 +671,16 @@ function viewAlumno(id) {
     const f = e.target;
     actInForm(f, () => reg.addSlot(s.id, { weekday: f.weekday.value, start: f.start.value, minutes: f.minutes.value }), "Día agregado.");
   });
-  $$("[data-jump]").forEach((b) => b.addEventListener("click", () => jumpTo(b.dataset.jump)));
+  $$("[data-part]").forEach((b) => b.addEventListener("click", () => {
+    openPart.part = b.dataset.part;
+    $$("[data-part]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    PARTS.forEach(([id]) => { $(`#part-${id}`).hidden = id !== openPart.part; });
+  }));
+  const edit = $("#edit-form");
+  const editOpen = $("[data-act=edit-open]");
+  const setEditing = (on) => { edit.hidden = !on; editOpen.setAttribute("aria-expanded", String(on)); if (on) edit.name.focus(); else editOpen.focus(); };
+  editOpen.addEventListener("click", () => setEditing(edit.hidden));
+  $("[data-act=edit-cancel]").addEventListener("click", () => { edit.reset(); $(".form-msg", edit).innerHTML = ""; setEditing(false); });
   $("#rate-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const f = e.target;
@@ -688,7 +688,7 @@ function viewAlumno(id) {
     if (!from) { $(".form-msg", f).innerHTML = `<div class="notice notice-error" role="alert">No entendí desde cuándo.</div>`; return; }
     actInForm(f, () => reg.setRate(s.id, f.rate.value, from), `Nueva tarifa desde el ${fmtDM(from)}.`);
   });
-  $("#edit-form").addEventListener("submit", (e) => {
+  edit.addEventListener("submit", (e) => {
     e.preventDefault();
     actInForm(e.target, () => reg.updateStudent(s.id, { name: e.target.name.value, notes: e.target.notes.value, ...schoolValues(e.target) }), "Guardado.");
   });
@@ -1020,10 +1020,10 @@ function viewAyuda() {
       ])}
       ${card("alumnos", "user-plus", "Alumnos y tarifas", [
         "En <strong>Alumnos</strong>, tocá <strong>Agregar alumno</strong>: nombre, tarifa por clase (en pesos o dólares; una clase cuesta lo mismo dure 50 minutos o una hora) y su día y hora de clase. Si viene cuando puede, dejá <strong>Sin día fijo</strong>.",
-        "Para agendarle una clase a cualquiera (sobre todo a los que no tienen día fijo), en su ficha tocá <strong>Agendar clase</strong>: día, hora y cuánto dura.",
-        "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Tocando el mail se abre Mail para escribirle.",
-        "En su ficha podés agregar otro día, cambiarlo o quitarlo.",
-        "Para subirle la tarifa, usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",
+        "Para agendarle una clase a cualquiera (sobre todo a los que no tienen día fijo), en su ficha abrí <strong>Próximas clases</strong> y tocá <strong>Agendar clase</strong>: día, hora y cuánto dura.",
+        "En <strong>Datos del colegio</strong> anotás su colegio, el año (1º a 6º) y su maestra o maestro con el mail. Para cambiarlos, o el nombre y las notas, tocá el <strong>lápiz</strong> al lado de su nombre. Tocando el mail se abre Mail para escribirle.",
+        "En su ficha, abajo del nombre, elegís qué ver: <strong>Cuenta</strong>, <strong>Días de clase</strong> (agregar otro día, cambiarlo o quitarlo), <strong>Tarifa</strong> o <strong>Próximas clases</strong>.",
+        "Para subirle la tarifa, en <strong>Tarifa</strong> usá <strong>Cambiar tarifa</strong> con la fecha desde cuándo. Las clases de antes se siguen cobrando a la tarifa vieja.",
         "Si deja de venir, <strong>Archivar</strong> quita sus clases que vienen. Lo que te debe y su historial quedan.",
       ], ["#/alumnos", "Ir a Alumnos"])}
       ${card("ganancias", "chart-column", "Ganancias, ¿Y si…? y dólares", [
